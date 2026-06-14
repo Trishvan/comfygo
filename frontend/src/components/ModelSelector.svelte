@@ -1,29 +1,44 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { ListModels } from "../../wailsjs/go/orchestrator/Manager";
 
-  export let modelPath: string;
-  export let vaePath: string;
+  export let modelPath: string = "";
+  export let vaePath: string = "";
 
   let models: string[] = [];
   let vaes: string[] = [];
+  let loading = true;
+  let errorMsg = "";
 
   onMount(async () => {
     try {
-      models = await window.runtime.Call("ListModels") || [];
-    } catch (e) {
-      console.error("ListModels failed:", e);
+      const result = await ListModels();
+      console.log("ListModels result:", result);
+      models = result || [];
+    } catch (e: any) {
+      errorMsg = String(e?.message || e);
+      console.error("ListModels error:", e);
+    } finally {
+      loading = false;
     }
   });
 
   function basename(path: string): string {
-    return path.split("/").pop() || path;
+    const parts = path.split("/");
+    return parts[parts.length - 1] || path;
   }
 </script>
+
+{#if errorMsg}
+  <div class="error">Error: {errorMsg}</div>
+{/if}
 
 <div class="field">
   <label for="model">Model</label>
   <select id="model" bind:value={modelPath}>
-    <option value="">-- Select model --</option>
+    <option value="">
+      {loading ? "Loading..." : models.length === 0 ? "No models found in ~/.comfygo/models/" : "-- Select model --"}
+    </option>
     {#each models as m}
       <option value={m}>{basename(m)}</option>
     {/each}
@@ -41,6 +56,15 @@
 </div>
 
 <style>
+  .error {
+    background: #3a1a1a;
+    color: #f87171;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
   .field {
     display: flex;
     flex-direction: column;

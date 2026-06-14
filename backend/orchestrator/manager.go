@@ -1,14 +1,19 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/comfygo/backend/bridge"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -142,24 +147,42 @@ func (m *Manager) worker() {
 
 		bridge.FreeModel(handle)
 
-		// Copy to Go-managed memory so GC handles cleanup
-		goBytes := make([]byte, len(result.Data))
-		copy(goBytes, result.Data)
+		w := result.Width
+		h := result.Height
+		ch := result.Channels
+
+		// Copy raw pixel data into Go-managed memory
+		raw := make([]byte, len(result.Data))
+		copy(raw, result.Data)
 		bridge.FreeImage(&result)
 
+		// Encode raw pixels to PNG
+		pngBytes, err := encodePNG(raw, w, h, ch)
+		if err != nil {
+			m.setError(fmt.Errorf("encode PNG: %w", err))
+			continue
+		}
+
+		// Sanity check: save to ~/.comfygo/generation/
+		if savePath, err := saveImage(pngBytes, params); err != nil {
+			fmt.Printf("WARN: failed to save image: %v\n", err)
+		} else {
+			fmt.Printf("INFO: image saved to %s\n", savePath)
+		}
+
 		m.mu.Lock()
-		m.resultData = goBytes
-		m.resultW = result.Width
-		m.resultH = result.Height
+		m.resultData = pngBytes
+		m.resultW = w
+		m.resultH = h
 		m.mu.Unlock()
 
-		m.AssetHandler.SetImage(goBytes, result.Width, result.Height)
+		m.AssetHandler.SetImage(pngBytes, w, h)
 
 		m.setState(StateComplete)
 		m.setProgress(1.0)
 		m.emit("generation-complete", map[string]int{
-			"width":  result.Width,
-			"height": result.Height,
+			"width":  w,
+			"height": h,
 		})
 	}
 }
@@ -168,8 +191,8 @@ func (m *Manager) Generate(params GenerationParams) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.state != StateIdle {
-		return fmt.Errorf("generation already in progress (state: %s)", m.state)
+	if m.state != StateIdle && m.state != StateComplete {
+		return fmt.Errorf("cannot generate in state: %s", m.state)
 	}
 
 	if params.Width == 0 {
@@ -211,6 +234,15 @@ func (m *Manager) GetProgress() float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.progress
+}
+
+func (m *Manager) GetImageData() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.resultData) == 0 {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(m.resultData)
 }
 
 func (m *Manager) ListModels() []string {
@@ -260,6 +292,53 @@ func (m *Manager) setError(err error) {
 	m.state = StateError
 	m.mu.Unlock()
 	m.emit("error", err.Error())
+}
+
+func encodePNG(data []byte, w, h, ch int) ([]byte, error) {
+	if ch == 4 {
+		img := &image.RGBA{
+			Pix:    data,
+			Stride: 4 * w,
+			Rect:   image.Rect(0, 0, w, h),
+		}
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			return nil, err
+		}
+		return buf.Bytes(), nil
+	}
+
+	// Assume 3 channels (RGB) — convert to RGBA
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			srcOff := (y*w + x) * 3
+			dstOff := (y*w + x) * 4
+			img.Pix[dstOff+0] = data[srcOff+0]
+			img.Pix[dstOff+1] = data[srcOff+1]
+			img.Pix[dstOff+2] = data[srcOff+2]
+			img.Pix[dstOff+3] = 255
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func saveImage(data []byte, params GenerationParams) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".comfygo", "generation")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	ts := time.Now().Format("20060102_150405")
+	path := filepath.Join(dir, fmt.Sprintf("%s_%dx%d.png", ts, params.Width, params.Height))
+	return path, os.WriteFile(path, data, 0644)
 }
 
 func SanitizePromptWeights(prompt string) string {
