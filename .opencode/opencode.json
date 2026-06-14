@@ -1,6 +1,0 @@
-{
-  "$schema": "../opencode-schema.json",
-  "plugin": [
-    "opendesign@git+https://github.com/manalkaff/opendesign.git"
-  ]
-}

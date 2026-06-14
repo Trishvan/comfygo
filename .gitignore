@@ -42,3 +42,7 @@ Sdcpp/
 # Env
 .env
 .env.local
+
+# Tooling config (local only)
+AGENTS.md
+.opencode/
