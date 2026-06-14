@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { label, value } = $props();
+  export let label: string;
+  export let value: string;
 </script>
 
 <div class="field">

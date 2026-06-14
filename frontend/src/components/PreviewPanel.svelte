@@ -1,5 +1,9 @@
 <script lang="ts">
-  let { imageUrl, imageWidth, imageHeight, progress, state } = $props();
+  export let imageUrl: string;
+  export let imageWidth: number;
+  export let imageHeight: number;
+  export let progress: number;
+  export let state: string;
 </script>
 
 <div class="preview-container">

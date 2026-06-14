@@ -2,10 +2,12 @@ package bridge
 
 /*
 #cgo CFLAGS: -I${SRCDIR}
-#cgo LDFLAGS: -lstdc++ -lm
+#cgo LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -lstable-diffusion -lstdc++ -lm -ldl
 
 #include <stdlib.h>
 #include "bridge.h"
+
+extern void goProgressCb(int step, int steps, float time, void* data);
 */
 import "C"
 import (
@@ -14,11 +16,11 @@ import (
 )
 
 type ImageResult struct {
-	Width  int
-	Height int
+	Width    int
+	Height   int
 	Channels int
-	Data   []byte
-	cPtr   *C.uchar
+	Data     []byte
+	cData    *C.uint8_t
 }
 
 type GenerationConfig struct {
@@ -36,26 +38,34 @@ type GenerationConfig struct {
 
 type ProgressCallback func(step, total int)
 
-func LoadModel(modelPath string) (int, error) {
-	cPath := C.CString(modelPath)
-	defer C.free(unsafe.Pointer(cPath))
+var currentProgressCb ProgressCallback
 
-	handle := int(C.load_model(cPath))
+//export goProgressCb
+func goProgressCb(step C.int, steps C.int, time C.float, data unsafe.Pointer) {
+	if currentProgressCb != nil {
+		currentProgressCb(int(step), int(steps))
+	}
+}
+
+func LoadModel(modelPath, vaePath string) (int, error) {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	var cVaePath *C.char
+	if vaePath != "" {
+		cVaePath = C.CString(vaePath)
+		defer C.free(unsafe.Pointer(cVaePath))
+	}
+
+	handle := int(C.load_model(cModelPath, cVaePath))
 	if handle == 0 {
-		return 0, fmt.Errorf("load_model failed: %s", lastError())
+		return 0, fmt.Errorf("load_model failed")
 	}
 	return handle, nil
 }
 
-func LoadVae(handle int, vaePath string) error {
-	cPath := C.CString(vaePath)
-	defer C.free(unsafe.Pointer(cPath))
-
-	ret := int(C.load_vae(C.int(handle), cPath))
-	if ret != 0 {
-		return fmt.Errorf("load_vae failed: %s", lastError())
-	}
-	return nil
+func FreeModel(handle int) {
+	C.free_model_c(C.int(handle))
 }
 
 func Txt2Img(handle int, cfg GenerationConfig, cb ProgressCallback) (ImageResult, error) {
@@ -77,53 +87,31 @@ func Txt2Img(handle int, cfg GenerationConfig, cb ProgressCallback) (ImageResult
 	defer C.free(unsafe.Pointer(cCfg.vae_path))
 	defer C.free(unsafe.Pointer(cCfg.sampler_name))
 
-	var cbData progressCallbackData
-	cbData.fn = cb
+	currentProgressCb = cb
+	defer func() { currentProgressCb = nil }()
 
-	cResult := C.txt2img_c(C.int(handle), cCfg, nil, nil)
+	cResult := C.txt2img_c(C.int(handle), cCfg)
 	if cResult.data == nil {
-		return ImageResult{}, fmt.Errorf("txt2img_c failed: %s", lastError())
+		return ImageResult{}, fmt.Errorf("txt2img_c failed")
 	}
 
-	totalBytes := int(cResult.width) * int(cResult.height) * int(cResult.channels)
+	totalBytes := int(cResult.width) * int(cResult.height) * int(cResult.channel)
 	goSlice := unsafe.Slice((*byte)(unsafe.Pointer(cResult.data)), totalBytes)
 
 	return ImageResult{
 		Width:    int(cResult.width),
 		Height:   int(cResult.height),
-		Channels: int(cResult.channels),
+		Channels: int(cResult.channel),
 		Data:     goSlice,
-		cPtr:     cResult.data,
+		cData:    cResult.data,
 	}, nil
 }
 
 func FreeImage(img *ImageResult) {
-	if img == nil || img.cPtr == nil {
+	if img == nil || img.cData == nil {
 		return
 	}
-	cResult := C.image_result_t{
-		data:     img.cPtr,
-		width:    C.int(img.Width),
-		height:   C.int(img.Height),
-		channels: C.int(img.Channels),
-	}
-	C.free_image(&cResult)
+	C.free(unsafe.Pointer(img.cData))
 	img.Data = nil
-	img.cPtr = nil
-}
-
-func FreeModel(handle int) {
-	C.free_model_c(C.int(handle))
-}
-
-func lastError() string {
-	cErr := C.get_last_error()
-	if cErr == nil {
-		return "unknown error"
-	}
-	return C.GoString(cErr)
-}
-
-type progressCallbackData struct {
-	fn ProgressCallback
+	img.cData = nil
 }

@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -94,18 +96,10 @@ func (m *Manager) worker() {
 		}
 
 		m.setState(StateLoading)
-		handle, err := bridge.LoadModel(params.ModelPath)
+		handle, err := bridge.LoadModel(params.ModelPath, params.VaePath)
 		if err != nil {
 			m.setError(err)
 			continue
-		}
-
-		if params.VaePath != "" {
-			if err := bridge.LoadVae(handle, params.VaePath); err != nil {
-				bridge.FreeModel(handle)
-				m.setError(err)
-				continue
-			}
 		}
 
 		select {
@@ -148,18 +142,18 @@ func (m *Manager) worker() {
 
 		bridge.FreeModel(handle)
 
+		// Copy to Go-managed memory so GC handles cleanup
+		goBytes := make([]byte, len(result.Data))
+		copy(goBytes, result.Data)
+		bridge.FreeImage(&result)
+
 		m.mu.Lock()
-		oldData := m.resultData
-		m.resultData = result.Data
+		m.resultData = goBytes
 		m.resultW = result.Width
 		m.resultH = result.Height
 		m.mu.Unlock()
 
-		if oldData != nil {
-			bridge.FreeImage(&bridge.ImageResult{Data: oldData})
-		}
-
-		m.AssetHandler.SetImage(result.Data, result.Width, result.Height)
+		m.AssetHandler.SetImage(goBytes, result.Width, result.Height)
 
 		m.setState(StateComplete)
 		m.setProgress(1.0)
@@ -217,6 +211,29 @@ func (m *Manager) GetProgress() float64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.progress
+}
+
+func (m *Manager) ListModels() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	dir := filepath.Join(home, ".comfygo", "models")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var models []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if ext == ".safetensors" || ext == ".ckpt" || ext == ".pt" || ext == ".pth" || ext == ".gguf" {
+			models = append(models, filepath.Join(dir, e.Name()))
+		}
+	}
+	return models
 }
 
 func (m *Manager) emit(event string, data ...interface{}) {

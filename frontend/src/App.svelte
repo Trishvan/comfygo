@@ -3,12 +3,12 @@
   import PreviewPanel from "./components/PreviewPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
 
-  let state = $state("idle");
-  let progress = $state(0);
-  let imageUrl = $state("");
-  let imageWidth = $state(0);
-  let imageHeight = $state(0);
-  let genId = $state(0);
+  let state = "idle";
+  let progress = 0;
+  let imageUrl = "";
+  let imageWidth = 0;
+  let imageHeight = 0;
+  let genId = 0;
 
   function handleGenerate(params: any) {
     imageUrl = "";

@@ -1,9 +1,16 @@
 <script lang="ts">
-  let { state, progress } = $props();
+  export let state: string;
+  export let progress: number;
 
-  let label = $derived(state === "idle" ? "Ready" : state === "loading" ? "Loading model..." : state === "generating" ? `Generating... ${(progress * 100).toFixed(0)}%` : state === "complete" ? "Complete" : "Error");
+  $: label = state === "idle" ? "Ready"
+    : state === "loading" ? "Loading model..."
+    : state === "generating" ? `Generating... ${(progress * 100).toFixed(0)}%`
+    : state === "complete" ? "Complete"
+    : "Error";
 
-  let barWidth = $derived(state === "generating" ? `${progress * 100}%` : state === "complete" ? "100%" : "0%");
+  $: barWidth = state === "generating" ? `${progress * 100}%`
+    : state === "complete" ? "100%"
+    : "0%";
 </script>
 
 <div class="status-bar">
