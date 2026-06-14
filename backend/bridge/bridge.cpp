@@ -65,6 +65,7 @@ sd_image_t txt2img_c(int model_handle, sd_config_t config) {
     sd_sample_params_init(&sample_params);
     sample_params.sample_method = (enum sample_method_t)sample_method_from_name(config.sampler_name);
     sample_params.sample_steps = config.steps;
+    sample_params.guidance.txt_cfg = config.cfg_scale;
 
     sd_img_gen_params_t gen_params;
     sd_img_gen_params_init(&gen_params);
@@ -77,6 +78,11 @@ sd_image_t txt2img_c(int model_handle, sd_config_t config) {
     gen_params.batch_count = 1;
     gen_params.sample_params = sample_params;
     gen_params.strength = 1.0f;
+
+    // Enable VAE tiling for resolutions above 512 to avoid memory/artifacts
+    if (config.width > 512 || config.height > 512) {
+        gen_params.vae_tiling_params.enabled = true;
+    }
 
     // Register the Go-exported progress callback
     sd_set_progress_callback(goProgressCb, nullptr);

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { EventsOn } from "../wailsjs/runtime/runtime";
+  import { Generate, Cancel, GetImageData } from "../wailsjs/go/orchestrator/Manager";
   import GenerationForm from "./components/GenerationForm.svelte";
   import PreviewPanel from "./components/PreviewPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
@@ -8,15 +11,14 @@
   let imageUrl = "";
   let imageWidth = 0;
   let imageHeight = 0;
-  let genId = 0;
 
-  function handleGenerate(params: any) {
+  async function handleGenerate(params: any) {
     imageUrl = "";
-    window.runtime.Call("Generate", params);
+    Generate(params);
   }
 
   function handleCancel() {
-    window.runtime.Call("Cancel");
+    Cancel();
   }
 
   function onStateChange(s: string) {
@@ -27,12 +29,15 @@
     progress = step / total;
   }
 
-  function onComplete(meta: { width: number; height: number }) {
-    genId++;
-    imageUrl = `wails://app/render.png?id=${genId}`;
+  async function onComplete(meta: { width: number; height: number }) {
     imageWidth = meta.width;
     imageHeight = meta.height;
     state = "complete";
+
+    const b64 = await GetImageData();
+    if (b64) {
+      imageUrl = `data:image/png;base64,${b64}`;
+    }
   }
 
   function onError(msg: string) {
@@ -40,10 +45,13 @@
     console.error(msg);
   }
 
-  window.runtime.EventsOn("state-change", onStateChange);
-  window.runtime.EventsOn("progress", onProgress);
-  window.runtime.EventsOn("generation-complete", onComplete);
-  window.runtime.EventsOn("error", onError);
+  onMount(() => {
+    const unsub1 = EventsOn("state-change", onStateChange);
+    const unsub2 = EventsOn("progress", onProgress);
+    const unsub3 = EventsOn("generation-complete", onComplete);
+    const unsub4 = EventsOn("error", onError);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+  });
 </script>
 
 <div class="app-shell">

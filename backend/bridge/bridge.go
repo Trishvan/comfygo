@@ -2,7 +2,7 @@ package bridge
 
 /*
 #cgo CFLAGS: -I${SRCDIR}
-#cgo LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -lstable-diffusion -lstdc++ -lm -ldl
+#cgo LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -Wl,-rpath,${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -lstable-diffusion -lstdc++ -lm -ldl
 
 #include <stdlib.h>
 #include "bridge.h"
