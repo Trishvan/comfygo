@@ -1,23 +1,22 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+
   export let modelPath: string;
   export let vaePath: string;
 
   let models: string[] = [];
   let vaes: string[] = [];
 
-  async function listFiles(dir: string): Promise<string[]> {
+  onMount(async () => {
     try {
-      return await window.runtime.Call("ListModels", dir) || [];
-    } catch {
-      return [];
+      models = await window.runtime.Call("ListModels") || [];
+    } catch (e) {
+      console.error("ListModels failed:", e);
     }
-  }
+  });
 
-  $: {
-    const dir = localStorage.getItem("comfygo-model-dir") || "";
-    if (dir) {
-      listFiles(dir).then((m) => { models = m; });
-    }
+  function basename(path: string): string {
+    return path.split("/").pop() || path;
   }
 </script>
 
@@ -26,7 +25,7 @@
   <select id="model" bind:value={modelPath}>
     <option value="">-- Select model --</option>
     {#each models as m}
-      <option value={m}>{m}</option>
+      <option value={m}>{basename(m)}</option>
     {/each}
   </select>
 </div>
@@ -36,7 +35,7 @@
   <select id="vae" bind:value={vaePath}>
     <option value="">-- No VAE --</option>
     {#each vaes as v}
-      <option value={v}>{v}</option>
+      <option value={v}>{basename(v)}</option>
     {/each}
   </select>
 </div>
