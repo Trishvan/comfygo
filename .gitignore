@@ -1,0 +1,41 @@
+# Binaries
+build/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.o
+*.obj
+
+# Go
+vendor/
+*.test
+*.out
+
+# Node
+node_modules/
+dist/
+.svelte-kit/
+
+# Wails
+frontend/dist/
+
+# Models — never commit
+*.ckpt
+*.safetensors
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env
+.env
+.env.local
