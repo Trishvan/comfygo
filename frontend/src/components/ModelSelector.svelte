@@ -1,8 +1,9 @@
 <script lang="ts">
-  let { modelPath, vaePath } = $props();
+  export let modelPath: string;
+  export let vaePath: string;
 
-  let models = $state<string[]>([]);
-  let vaes = $state<string[]>([]);
+  let models: string[] = [];
+  let vaes: string[] = [];
 
   async function listFiles(dir: string): Promise<string[]> {
     try {
@@ -12,12 +13,12 @@
     }
   }
 
-  $effect(() => {
+  $: {
     const dir = localStorage.getItem("comfygo-model-dir") || "";
     if (dir) {
       listFiles(dir).then((m) => { models = m; });
     }
-  });
+  }
 </script>
 
 <div class="field">

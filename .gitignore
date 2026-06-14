@@ -36,6 +36,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Prebuilt SD.cpp binary (large, ~100MB)
+Sdcpp/
+
 # Env
 .env
 .env.local

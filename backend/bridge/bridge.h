@@ -1,20 +1,13 @@
 #ifndef BRIDGE_H
 #define BRIDGE_H
 
-#include <stdint.h>
-#include <stddef.h>
+#include "sd.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct {
-    int width;
-    int height;
-    int channels;
-    uint8_t* data;
-} image_result_t;
-
+// Simplified config for the bridge layer
 typedef struct {
     const char* prompt;
     const char* negative_prompt;
@@ -28,14 +21,15 @@ typedef struct {
     const char* sampler_name;
 } sd_config_t;
 
-typedef void (*progress_callback_t)(int step, int total, void* user_data);
-
-int load_model(const char* model_path);
-int load_vae(int model_handle, const char* vae_path);
-image_result_t txt2img_c(int model_handle, sd_config_t config, progress_callback_t progress_cb, void* user_data);
-void free_image(image_result_t* img);
+// Model management
+int load_model(const char* model_path, const char* vae_path);
 void free_model_c(int model_handle);
-const char* get_last_error(void);
+
+// Image generation    
+sd_image_t txt2img_c(int model_handle, sd_config_t config);
+
+// The Go-exported progress callback, callable from C
+extern void goProgressCb(int step, int steps, float time, void* data);
 
 #ifdef __cplusplus
 }

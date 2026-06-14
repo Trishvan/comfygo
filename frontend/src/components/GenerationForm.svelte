@@ -2,17 +2,21 @@
   import PromptInput from "./PromptInput.svelte";
   import ModelSelector from "./ModelSelector.svelte";
 
-  let { state, onGenerate, onCancel } = $props();
+  export let state: string;
+  export let onGenerate: (params: any) => void;
+  export let onCancel: () => void;
 
-  let prompt = $state("");
-  let negativePrompt = $state("");
-  let modelPath = $state("");
-  let vaePath = $state("");
-  let steps = $state(20);
-  let cfgScale = $state(7.0);
-  let seed = $state(-1);
-  let width = $state(512);
-  let height = $state(512);
+  let prompt = "";
+  let negativePrompt = "";
+  let modelPath = "";
+  let vaePath = "";
+  let steps = 20;
+  let cfgScale = 7.0;
+  let seed = -1;
+  let width = 512;
+  let height = 512;
+
+  $: isBusy = state === "loading" || state === "generating";
 
   function submit() {
     onGenerate({
@@ -28,11 +32,9 @@
       samplerName: "euler_a",
     });
   }
-
-  let isBusy = $derived(state === "loading" || state === "generating");
 </script>
 
-<form onsubmit={(e) => { e.preventDefault(); submit(); }}>
+<form on:submit|preventDefault={submit}>
   <ModelSelector bind:modelPath bind:vaePath />
 
   <PromptInput label="Prompt" bind:value={prompt} />
@@ -74,7 +76,7 @@
 
   <div class="actions">
     {#if isBusy}
-      <button type="button" class="btn btn-cancel" onclick={onCancel}>Cancel</button>
+      <button type="button" class="btn btn-cancel" on:click={onCancel}>Cancel</button>
     {:else}
       <button type="submit" class="btn btn-generate">Generate</button>
     {/if}
