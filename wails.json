@@ -1,0 +1,12 @@
+{
+  "name": "comfygo",
+  "version": "0.1.0",
+  "description": "Node-free Stable Diffusion desktop app using Wails + stable-diffusion.cpp",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": "comfygo",
+  "output": "build",
+  "wailsjs": "./frontend/src/generated"
+}
