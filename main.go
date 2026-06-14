@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"embed"
+	"io/fs"
 	"log"
 
 	"github.com/comfygo/backend/orchestrator"
@@ -10,14 +12,23 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
+//go:embed all:frontend/dist
+var frontendDist embed.FS
+
 func main() {
 	mgr := orchestrator.NewManager()
 
-	err := wails.Run(&options.App{
+	subFS, err := fs.Sub(frontendDist, "frontend/dist")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = wails.Run(&options.App{
 		Title:  "ComfyGo",
 		Width:  1280,
 		Height: 800,
 		AssetServer: &assetserver.Options{
+			Assets:  subFS,
 			Handler: mgr.AssetHandler,
 		},
 		OnStartup: func(ctx context.Context) {
