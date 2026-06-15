@@ -49,16 +49,18 @@ func (s GenerationState) String() string {
 }
 
 type GenerationParams struct {
-	Prompt         string  `json:"prompt"`
-	NegativePrompt string  `json:"negativePrompt"`
-	ModelPath      string  `json:"modelPath"`
-	VaePath        string  `json:"vaePath"`
-	Steps          int     `json:"steps"`
-	CfgScale       float64 `json:"cfgScale"`
-	Seed           int     `json:"seed"`
-	Width          int     `json:"width"`
-	Height         int     `json:"height"`
-	SamplerName    string  `json:"samplerName"`
+	Prompt         string   `json:"prompt"`
+	NegativePrompt string   `json:"negativePrompt"`
+	ModelPath      string   `json:"modelPath"`
+	VaePath        string   `json:"vaePath"`
+	Steps          int      `json:"steps"`
+	CfgScale       float64  `json:"cfgScale"`
+	Seed           int      `json:"seed"`
+	Width          int      `json:"width"`
+	Height         int      `json:"height"`
+	SamplerName    string   `json:"samplerName"`
+	LoraPaths      []string `json:"loraPaths"`
+	LoraScales     []float64 `json:"loraScales"`
 }
 
 type Manager struct {
@@ -183,6 +185,8 @@ func (m *Manager) worker() {
 			Width:          params.Width,
 			Height:         params.Height,
 			SamplerName:    params.SamplerName,
+			LoraPaths:      params.LoraPaths,
+			LoraScales:     params.LoraScales,
 		}
 
 		cb := func(step, total int) {
@@ -301,15 +305,38 @@ func (m *Manager) GetSystemStats() SystemStats {
 	return getSystemStats()
 }
 
+func (m *Manager) ListLoras() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []string{}
+	}
+	dir := filepath.Join(home, ".comfygo", "loras")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return []string{}
+	}
+	var loras []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if ext == ".safetensors" || ext == ".ckpt" || ext == ".pt" || ext == ".pth" {
+			loras = append(loras, filepath.Join(dir, e.Name()))
+		}
+	}
+	return loras
+}
+
 func (m *Manager) ListModels() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil
+		return []string{}
 	}
 	dir := filepath.Join(home, ".comfygo", "models")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return []string{}
 	}
 	var models []string
 	for _, e := range entries {

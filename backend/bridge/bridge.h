@@ -19,6 +19,9 @@ typedef struct {
     int width;
     int height;
     const char* sampler_name;
+    const char** lora_paths;
+    float* lora_scales;
+    int lora_count;
 } sd_config_t;
 
 // Model management

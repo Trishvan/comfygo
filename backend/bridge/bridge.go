@@ -34,6 +34,8 @@ type GenerationConfig struct {
 	Width          int
 	Height         int
 	SamplerName    string
+	LoraPaths      []string
+	LoraScales     []float64
 }
 
 type ProgressCallback func(step, total int)
@@ -86,6 +88,48 @@ func Txt2Img(handle int, cfg GenerationConfig, cb ProgressCallback) (ImageResult
 	defer C.free(unsafe.Pointer(cCfg.model_path))
 	defer C.free(unsafe.Pointer(cCfg.vae_path))
 	defer C.free(unsafe.Pointer(cCfg.sampler_name))
+
+	// Build C LoRA arrays
+	loraCount := len(cfg.LoraPaths)
+	if loraCount > 0 {
+		// Allocate C string pointers first (keep in Go slice for safe cleanup)
+		cPathPtrs := make([]*C.char, loraCount)
+		for i := 0; i < loraCount; i++ {
+			cPathPtrs[i] = C.CString(cfg.LoraPaths[i])
+		}
+
+		// Build paths array (char**) in C memory
+		pathsSize := C.size_t(loraCount) * C.size_t(unsafe.Sizeof(uintptr(0)))
+		pathsPtr := C.malloc(pathsSize)
+		pathsSlice := unsafe.Slice((*uintptr)(pathsPtr), loraCount)
+		for i := 0; i < loraCount; i++ {
+			pathsSlice[i] = uintptr(unsafe.Pointer(cPathPtrs[i]))
+		}
+		cCfg.lora_paths = (**C.char)(pathsPtr)
+
+		// Build scales array (float*) in C memory
+		scalesSize := C.size_t(loraCount) * C.size_t(unsafe.Sizeof(C.float(0)))
+		scalesPtr := C.malloc(scalesSize)
+		scalesSlice := unsafe.Slice((*C.float)(scalesPtr), loraCount)
+		for i := 0; i < loraCount; i++ {
+			scale := 1.0
+			if i < len(cfg.LoraScales) {
+				scale = cfg.LoraScales[i]
+			}
+			scalesSlice[i] = C.float(scale)
+		}
+		cCfg.lora_scales = (*C.float)(scalesPtr)
+		cCfg.lora_count = C.int(loraCount)
+
+		// Deferred cleanup of LoRA C memory
+		defer func() {
+			for _, p := range cPathPtrs {
+				C.free(unsafe.Pointer(p))
+			}
+			C.free(pathsPtr)
+			C.free(scalesPtr)
+		}()
+	}
 
 	currentProgressCb = cb
 	defer func() { currentProgressCb = nil }()

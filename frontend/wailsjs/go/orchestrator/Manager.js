@@ -26,6 +26,10 @@ export function GetSystemStats() {
   return window['go']['orchestrator']['Manager']['GetSystemStats']();
 }
 
+export function ListLoras() {
+  return window['go']['orchestrator']['Manager']['ListLoras']();
+}
+
 export function ListModels() {
   return window['go']['orchestrator']['Manager']['ListModels']();
 }

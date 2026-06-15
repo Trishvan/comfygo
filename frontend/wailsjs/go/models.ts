@@ -11,6 +11,8 @@ export namespace orchestrator {
 	    width: number;
 	    height: number;
 	    samplerName: string;
+	    loraPaths: string[];
+	    loraScales: number[];
 	
 	    static createFrom(source: any = {}) {
 	        return new GenerationParams(source);
@@ -28,6 +30,8 @@ export namespace orchestrator {
 	        this.width = source["width"];
 	        this.height = source["height"];
 	        this.samplerName = source["samplerName"];
+	        this.loraPaths = source["loraPaths"];
+	        this.loraScales = source["loraScales"];
 	    }
 	}
 	export class SystemStats {

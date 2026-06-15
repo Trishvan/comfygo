@@ -15,6 +15,8 @@ export function GetState():Promise<string>;
 
 export function GetSystemStats():Promise<orchestrator.SystemStats>;
 
+export function ListLoras():Promise<Array<string>>;
+
 export function ListModels():Promise<Array<string>>;
 
 export function Start(arg1:context.Context):Promise<void>;

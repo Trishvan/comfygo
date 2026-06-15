@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 static std::unordered_map<int, sd_ctx_t*> g_models;
 static int g_next_handle = 1;
@@ -82,6 +83,21 @@ sd_image_t txt2img_c(int model_handle, sd_config_t config) {
     // Enable VAE tiling for resolutions above 512 to avoid memory/artifacts
     if (config.width > 512 || config.height > 512) {
         gen_params.vae_tiling_params.enabled = true;
+    }
+
+    // Apply LoRAs
+    std::vector<sd_lora_t> loras;
+    if (config.lora_count > 0 && config.lora_paths != nullptr) {
+        loras.reserve(config.lora_count);
+        for (int i = 0; i < config.lora_count; i++) {
+            sd_lora_t lora{};
+            lora.path = config.lora_paths[i];
+            lora.multiplier = config.lora_scales ? config.lora_scales[i] : 1.0f;
+            lora.is_high_noise = false;
+            loras.push_back(lora);
+        }
+        gen_params.loras = loras.data();
+        gen_params.lora_count = static_cast<uint32_t>(config.lora_count);
     }
 
     // Register the Go-exported progress callback

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import PromptInput from "./PromptInput.svelte";
   import ModelSelector from "./ModelSelector.svelte";
+  import { ListLoras } from "../../wailsjs/go/orchestrator/Manager";
 
   export let state: string;
   export let onGenerate: (params: any) => void;
@@ -18,11 +19,20 @@
   let width = 512;
   let height = 512;
 
+  interface LoraSlot {
+    path: string;
+    scale: number;
+  }
+  let loraSlots: LoraSlot[] = [];
+  let availableLoras: string[] = [];
+  let showLoraPicker = false;
+  let loraPickerQuery = "";
+
   let activeTab = "txt2img";
 
   $: isBusy = state === "loading" || state === "generating";
 
-  onMount(() => {
+  onMount(async () => {
     const saved = localStorage.getItem("comfygo_form");
     if (saved) {
       try {
@@ -37,8 +47,13 @@
         seed = f.seed ?? -1;
         width = f.width ?? 512;
         height = f.height ?? 512;
+        if (f.loraSlots) loraSlots = f.loraSlots;
       } catch {}
     }
+
+    try {
+      availableLoras = await ListLoras();
+    } catch {}
 
     window.addEventListener("beforeunload", saveForm);
     return () => window.removeEventListener("beforeunload", saveForm);
@@ -47,11 +62,32 @@
   function saveForm() {
     localStorage.setItem("comfygo_form", JSON.stringify({
       prompt, negativePrompt, modelPath, vaePath, samplerName,
-      steps, cfgScale, seed, width, height
+      steps, cfgScale, seed, width, height, loraSlots
     }));
   }
 
   $: saveForm();
+
+  function addLora(path: string) {
+    if (!loraSlots.find((s) => s.path === path)) {
+      loraSlots = [...loraSlots, { path, scale: 1.0 }];
+    }
+    showLoraPicker = false;
+    loraPickerQuery = "";
+  }
+
+  function removeLora(index: number) {
+    loraSlots = loraSlots.filter((_, i) => i !== index);
+  }
+
+  function loraName(fullPath: string): string {
+    const parts = fullPath.split("/");
+    return parts[parts.length - 1] || fullPath;
+  }
+
+  $: filteredLoras = (availableLoras || []).filter(
+    (l) => loraName(l).toLowerCase().includes(loraPickerQuery.toLowerCase())
+  );
 
   function submit() {
     onGenerate({
@@ -65,6 +101,8 @@
       width,
       height,
       samplerName,
+      loraPaths: loraSlots.map((s) => s.path),
+      loraScales: loraSlots.map((s) => s.scale),
     });
   }
 </script>
@@ -85,6 +123,63 @@
   {#if activeTab === "txt2img"}
     <form class="params" on:submit|preventDefault={submit}>
       <ModelSelector bind:modelPath bind:vaePath />
+
+      <div class="field lora-section">
+        <label>LoRAs</label>
+        {#each loraSlots as slot, i}
+          <div class="lora-row">
+            <span class="lora-name" title={slot.path}>{loraName(slot.path)}</span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step="0.05"
+              bind:value={slot.scale}
+              disabled={isBusy}
+              class="lora-scale"
+            />
+            <span class="lora-val">{slot.scale.toFixed(2)}</span>
+            <button
+              type="button"
+              class="lora-remove"
+              on:click={() => removeLora(i)}
+              disabled={isBusy}
+            >&times;</button>
+          </div>
+        {/each}
+        {#if showLoraPicker}
+          <div class="lora-picker">
+            <input
+              type="text"
+              placeholder="Search LoRAs..."
+              bind:value={loraPickerQuery}
+              class="lora-search"
+              disabled={isBusy}
+            />
+            <div class="lora-list">
+              {#if filteredLoras.length === 0}
+                <span class="lora-empty">No LoRAs found in ~/.comfygo/loras/</span>
+              {:else}
+                {#each filteredLoras as lora}
+                  <button
+                    type="button"
+                    class="lora-option"
+                    on:click={() => addLora(lora)}
+                    disabled={isBusy}
+                  >{loraName(lora)}</button>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        {:else}
+          <button
+            type="button"
+            class="btn btn-add-lora"
+            on:click={() => (showLoraPicker = true)}
+            disabled={isBusy}
+          >+ Add LoRA</button>
+        {/if}
+      </div>
 
       <div class="field">
         <label for="sampler">Sampler</label>
@@ -305,5 +400,110 @@
     flex: 1;
     color: var(--text-muted);
     font-size: 13px;
+  }
+
+  .lora-section {
+    gap: 6px;
+  }
+  .lora-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--bg-secondary);
+    border-radius: 5px;
+    border: 1px solid var(--border-subtle);
+  }
+  .lora-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .lora-scale {
+    width: 60px;
+    accent-color: var(--accent);
+  }
+  .lora-val {
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 28px;
+    text-align: right;
+  }
+  .lora-remove {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .lora-remove:disabled {
+    opacity: 0.4;
+  }
+  .btn-add-lora {
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border-subtle);
+    color: var(--accent);
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .btn-add-lora:hover:not(:disabled) {
+    background: var(--accent-glow);
+  }
+  .lora-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lora-search {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+  }
+  .lora-search:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .lora-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 5px;
+    padding: 4px;
+  }
+  .lora-option {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    text-align: left;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .lora-option:hover {
+    background: var(--accent-glow);
+    color: var(--text-primary);
+  }
+  .lora-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 8px;
+    text-align: center;
   }
 </style>
