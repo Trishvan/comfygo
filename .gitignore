@@ -43,6 +43,10 @@ Sdcpp/
 .env
 .env.local
 
-# Tooling config (local only)
+# Tooling config & docs (local only)
 AGENTS.md
+DESIGN.md
 .opencode/
+
+# Local mockup images
+*ChatGPT*Image*.png
