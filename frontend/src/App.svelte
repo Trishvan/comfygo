@@ -145,6 +145,7 @@
     right: 0;
     bottom: 0;
     left: 0;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 48px 1fr 320px;
     grid-template-rows: 38px 1fr 180px;
