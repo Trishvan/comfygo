@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { EventsOn, WindowSetSize, WindowSetPosition } from "../wailsjs/runtime/runtime";
-  import { Generate, Cancel, GetImageData } from "../wailsjs/go/orchestrator/Manager";
+  import { Generate, Cancel, GetImageData, GetSystemStats } from "../wailsjs/go/orchestrator/Manager";
   import TopBar from "./components/TopBar.svelte";
   import LeftNav from "./components/LeftNav.svelte";
   import PreviewPanel from "./components/PreviewPanel.svelte";
@@ -15,8 +15,29 @@
   let imageWidth = 0;
   let imageHeight = 0;
 
+  let ramUsedGB = 0;
+  let ramTotalGB = 0;
+  let ramPercent = 0;
+  let vramUsedGB = 0;
+  let vramTotalGB = 0;
+  let vramPercent = 0;
+
   let previewPanel: PreviewPanel;
   let bottomPanel: BottomPanel;
+
+  let statsTimer: number | undefined;
+
+  async function pollStats() {
+    try {
+      const s = await GetSystemStats();
+      ramUsedGB = s.ramUsedGB;
+      ramTotalGB = s.ramTotalGB;
+      ramPercent = s.ramPercent;
+      vramUsedGB = s.vramUsedGB;
+      vramTotalGB = s.vramTotalGB;
+      vramPercent = s.vramPercent;
+    } catch {}
+  }
 
   async function handleGenerate(params: any) {
     imageUrl = "";
@@ -79,13 +100,20 @@
       } catch {}
     }, 200);
 
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+    // Poll system stats every 3 seconds
+    pollStats();
+    statsTimer = window.setInterval(pollStats, 3000);
+
+    return () => {
+      unsub1(); unsub2(); unsub3(); unsub4();
+      if (statsTimer !== undefined) clearInterval(statsTimer);
+    };
   });
 </script>
 
 <div class="app-shell">
   <LeftNav />
-  <TopBar {state} />
+  <TopBar {state} {ramUsedGB} {ramTotalGB} {vramUsedGB} {vramTotalGB} />
   <div class="main-area">
     <PreviewPanel
       {imageUrl}
@@ -98,7 +126,7 @@
     <WorkflowStages {state} {progress} />
   </div>
   <InspectorPanel {state} onGenerate={handleGenerate} onCancel={handleCancel} />
-  <BottomPanel {state} bind:this={bottomPanel} />
+  <BottomPanel {state} {ramUsedGB} {ramTotalGB} {ramPercent} {vramUsedGB} {vramTotalGB} {vramPercent} bind:this={bottomPanel} />
 </div>
 
 <style>

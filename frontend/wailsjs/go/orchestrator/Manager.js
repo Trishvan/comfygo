@@ -22,6 +22,10 @@ export function GetState() {
   return window['go']['orchestrator']['Manager']['GetState']();
 }
 
+export function GetSystemStats() {
+  return window['go']['orchestrator']['Manager']['GetSystemStats']();
+}
+
 export function ListModels() {
   return window['go']['orchestrator']['Manager']['ListModels']();
 }

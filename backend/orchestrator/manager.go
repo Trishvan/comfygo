@@ -8,9 +8,11 @@ import (
 	"image"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +73,56 @@ type Manager struct {
 	resultData []byte
 	resultW    int
 	resultH    int
+}
+
+type SystemStats struct {
+	RAMTotalGB  float64 `json:"ramTotalGB"`
+	RAMUsedGB   float64 `json:"ramUsedGB"`
+	RAMPercent  float64 `json:"ramPercent"`
+	VRAMTotalGB float64 `json:"vramTotalGB"`
+	VRAMUsedGB  float64 `json:"vramUsedGB"`
+	VRAMPercent float64 `json:"vramPercent"`
+}
+
+func getSystemStats() SystemStats {
+	var stats SystemStats
+
+	// RAM from /proc/meminfo
+	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
+		re := regexp.MustCompile(`(?m)^MemTotal:\s+(\d+)\s+kB`)
+		if m := re.FindStringSubmatch(string(data)); len(m) > 1 {
+			if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+				stats.RAMTotalGB = v / 1024 / 1024
+			}
+		}
+		re = regexp.MustCompile(`(?m)^MemAvailable:\s+(\d+)\s+kB`)
+		if m := re.FindStringSubmatch(string(data)); len(m) > 1 {
+			if v, err := strconv.ParseFloat(m[1], 64); err == nil {
+				stats.RAMUsedGB = stats.RAMTotalGB - v/1024/1024
+			}
+		}
+		if stats.RAMTotalGB > 0 {
+			stats.RAMPercent = (stats.RAMUsedGB / stats.RAMTotalGB) * 100
+		}
+	}
+
+	// VRAM from nvidia-smi
+	if out, err := exec.Command("nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits").Output(); err == nil {
+		parts := strings.Fields(string(out))
+		if len(parts) >= 2 {
+			if used, err := strconv.ParseFloat(parts[0], 64); err == nil {
+				stats.VRAMUsedGB = used / 1024
+			}
+			if total, err := strconv.ParseFloat(parts[1], 64); err == nil {
+				stats.VRAMTotalGB = total / 1024
+			}
+			if stats.VRAMTotalGB > 0 {
+				stats.VRAMPercent = (stats.VRAMUsedGB / stats.VRAMTotalGB) * 100
+			}
+		}
+	}
+
+	return stats
 }
 
 func NewManager() *Manager {
@@ -243,6 +295,10 @@ func (m *Manager) GetImageData() string {
 		return ""
 	}
 	return base64.StdEncoding.EncodeToString(m.resultData)
+}
+
+func (m *Manager) GetSystemStats() SystemStats {
+	return getSystemStats()
 }
 
 func (m *Manager) ListModels() []string {

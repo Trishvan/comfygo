@@ -1,5 +1,11 @@
 <script lang="ts">
   export let state: string;
+  export let ramUsedGB = 0;
+  export let ramTotalGB = 0;
+  export let ramPercent = 0;
+  export let vramUsedGB = 0;
+  export let vramTotalGB = 0;
+  export let vramPercent = 0;
 
   let activeTab = "queue";
 
@@ -143,16 +149,16 @@
         <div class="sys-row">
           <span class="sys-label">RAM</span>
           <div class="sys-bar-track">
-            <div class="sys-bar" style="width: 0%"></div>
+            <div class="sys-bar" style="width: {ramPercent}%"></div>
           </div>
-          <span class="sys-value">-- / -- GB</span>
+          <span class="sys-value">{ramUsedGB.toFixed(1)} / {ramTotalGB.toFixed(1)} GB</span>
         </div>
         <div class="sys-row">
           <span class="sys-label">VRAM</span>
           <div class="sys-bar-track">
-            <div class="sys-bar" style="width: 0%"></div>
+            <div class="sys-bar" style="width: {vramPercent}%"></div>
           </div>
-          <span class="sys-value">-- / -- GB</span>
+          <span class="sys-value">{vramTotalGB > 0 ? `${vramUsedGB.toFixed(1)} / ${vramTotalGB.toFixed(1)} GB` : "-- / -- GB"}</span>
         </div>
         <div class="sys-row">
           <span class="sys-label">Backend</span>

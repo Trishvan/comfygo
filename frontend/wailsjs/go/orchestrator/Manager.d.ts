@@ -13,6 +13,8 @@ export function GetProgress():Promise<number>;
 
 export function GetState():Promise<string>;
 
+export function GetSystemStats():Promise<orchestrator.SystemStats>;
+
 export function ListModels():Promise<Array<string>>;
 
 export function Start(arg1:context.Context):Promise<void>;

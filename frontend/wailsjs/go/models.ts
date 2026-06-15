@@ -30,6 +30,28 @@ export namespace orchestrator {
 	        this.samplerName = source["samplerName"];
 	    }
 	}
+	export class SystemStats {
+	    ramTotalGB: number;
+	    ramUsedGB: number;
+	    ramPercent: number;
+	    vramTotalGB: number;
+	    vramUsedGB: number;
+	    vramPercent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ramTotalGB = source["ramTotalGB"];
+	        this.ramUsedGB = source["ramUsedGB"];
+	        this.ramPercent = source["ramPercent"];
+	        this.vramTotalGB = source["vramTotalGB"];
+	        this.vramUsedGB = source["vramUsedGB"];
+	        this.vramPercent = source["vramPercent"];
+	    }
+	}
 
 }
 

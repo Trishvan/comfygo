@@ -1,5 +1,12 @@
 <script lang="ts">
   export let state: string;
+  export let ramUsedGB = 0;
+  export let ramTotalGB = 0;
+  export let vramUsedGB = 0;
+  export let vramTotalGB = 0;
+
+  $: ramStr = `${ramUsedGB.toFixed(1)} / ${ramTotalGB.toFixed(1)} GB`;
+  $: vramStr = vramTotalGB > 0 ? `${vramUsedGB.toFixed(1)} / ${vramTotalGB.toFixed(1)} GB` : "-- / -- GB";
 </script>
 
 <div class="topbar">
@@ -11,11 +18,11 @@
   <div class="topbar-right">
     <div class="stat">
       <span class="stat-label">RAM</span>
-      <span class="stat-value">-- / -- GB</span>
+      <span class="stat-value">{ramStr}</span>
     </div>
     <div class="stat">
       <span class="stat-label">VRAM</span>
-      <span class="stat-value">-- / -- GB</span>
+      <span class="stat-value">{vramStr}</span>
     </div>
     <div class="stat backend">
       <span
