@@ -18,15 +18,15 @@
   label {
     font-size: 12px;
     font-weight: 500;
-    color: #888;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   textarea {
-    background: #25252b;
-    border: 1px solid #333;
-    color: #e0e0e0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
     padding: 8px 10px;
     border-radius: 6px;
     font-size: 13px;
@@ -37,6 +37,7 @@
 
   textarea:focus {
     outline: none;
-    border-color: #7c3aed;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
   }
 </style>

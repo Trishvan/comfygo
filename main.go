@@ -24,9 +24,11 @@ func main() {
 	}
 
 	err = wails.Run(&options.App{
-		Title:  "ComfyGo",
-		Width:  1280,
-		Height: 800,
+		Title:     "ComfyGo",
+		Width:     1280,
+		Height:    800,
+		MinWidth:  1024,
+		MinHeight: 600,
 		AssetServer: &assetserver.Options{
 			Assets:  subFS,
 			Handler: mgr.AssetHandler,
