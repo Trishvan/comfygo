@@ -12,6 +12,7 @@ extern void goProgressCb(int step, int steps, float time, void* data);
 import "C"
 import (
 	"fmt"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -41,6 +42,12 @@ type GenerationConfig struct {
 type ProgressCallback func(step, total int)
 
 var currentProgressCb ProgressCallback
+
+var cancelInFlight atomic.Bool
+
+func SetCancelInFlight()     { cancelInFlight.Store(true) }
+func IsCancelInFlight() bool { return cancelInFlight.Load() }
+func ClearCancelInFlight()   { cancelInFlight.Store(false) }
 
 //export goProgressCb
 func goProgressCb(step C.int, steps C.int, time C.float, data unsafe.Pointer) {

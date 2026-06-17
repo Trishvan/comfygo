@@ -25,6 +25,14 @@ func (h *ImageAssetHandler) SetImage(buf []byte, width, height int) {
 	h.Height = height
 }
 
+func (h *ImageAssetHandler) ClearImage() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.ActiveBuffer = nil
+	h.Width = 0
+	h.Height = 0
+}
+
 func (h *ImageAssetHandler) GetImage() ([]byte, int, int) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

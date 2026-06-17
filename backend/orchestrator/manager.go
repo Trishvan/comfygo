@@ -68,8 +68,8 @@ type Manager struct {
 	mu           sync.Mutex
 	state        GenerationState
 	progress     float64
-	jobChan      chan GenerationParams
-	cancelChan   chan struct{}
+	queue        *JobQueue
+	runSignal    chan struct{}
 	AssetHandler *ImageAssetHandler
 
 	resultData []byte
@@ -89,7 +89,6 @@ type SystemStats struct {
 func getSystemStats() SystemStats {
 	var stats SystemStats
 
-	// RAM from /proc/meminfo
 	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
 		re := regexp.MustCompile(`(?m)^MemTotal:\s+(\d+)\s+kB`)
 		if m := re.FindStringSubmatch(string(data)); len(m) > 1 {
@@ -108,7 +107,6 @@ func getSystemStats() SystemStats {
 		}
 	}
 
-	// VRAM from nvidia-smi
 	if out, err := exec.Command("nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits").Output(); err == nil {
 		parts := strings.Fields(string(out))
 		if len(parts) >= 2 {
@@ -129,9 +127,9 @@ func getSystemStats() SystemStats {
 
 func NewManager() *Manager {
 	m := &Manager{
-		state:      StateIdle,
-		jobChan:    make(chan GenerationParams, 1),
-		cancelChan: make(chan struct{}, 1),
+		state:     StateIdle,
+		queue:     NewJobQueue(""),
+		runSignal: make(chan struct{}, 1),
 	}
 	m.AssetHandler = NewImageAssetHandler()
 	go m.worker()
@@ -140,36 +138,65 @@ func NewManager() *Manager {
 
 func (m *Manager) Start(ctx context.Context) {
 	m.ctx = ctx
+
+	m.emitQueueUpdate()
+
+	if m.queue.HasQueued() {
+		select {
+		case m.runSignal <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (m *Manager) worker() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	for params := range m.jobChan {
-		select {
-		case <-m.cancelChan:
+	for {
+		item := m.queue.NextQueued()
+		if item == nil {
 			m.setState(StateIdle)
+			<-m.runSignal
 			continue
-		default:
+		}
+
+		params := item.Params
+		if params.Width == 0 {
+			params.Width = 512
+		}
+		if params.Height == 0 {
+			params.Height = 512
+		}
+		if params.Steps <= 0 {
+			params.Steps = 20
+		}
+		if params.CfgScale <= 0 {
+			params.CfgScale = 7.0
+		}
+		if params.SamplerName == "" {
+			params.SamplerName = "euler_a"
 		}
 
 		m.setState(StateLoading)
+		m.emitQueueUpdate()
+
 		handle, err := bridge.LoadModel(params.ModelPath, params.VaePath)
 		if err != nil {
+			m.queue.FailJob(item.ID, err.Error())
+			m.emitQueueUpdate()
 			m.setError(err)
+			m.setState(StateIdle)
 			continue
 		}
 
-		select {
-		case <-m.cancelChan:
+		if m.isCancelled(item) {
 			bridge.FreeModel(handle)
-			m.setState(StateIdle)
 			continue
-		default:
 		}
 
 		m.setState(StateGenerating)
+		m.emitQueueUpdate()
 
 		sanitizedPrompt := SanitizePromptWeights(params.Prompt)
 		sanitizedNeg := SanitizePromptWeights(params.NegativePrompt)
@@ -189,40 +216,58 @@ func (m *Manager) worker() {
 			LoraScales:     params.LoraScales,
 		}
 
+		jobID := item.ID
 		cb := func(step, total int) {
-			m.setProgress(float64(step) / float64(total))
+			p := float64(step) / float64(total)
+			m.queue.SetProgress(jobID, p)
+			m.emitQueueUpdate()
+			m.setProgress(p)
 			m.emit("progress", step, total)
 		}
 
 		result, err := bridge.Txt2Img(handle, cfg, cb)
-		if err != nil {
-			bridge.FreeModel(handle)
-			m.setError(err)
+		bridge.FreeModel(handle)
+
+		if bridge.IsCancelInFlight() {
+			bridge.ClearCancelInFlight()
+			m.queue.FailJob(jobID, "cancelled")
+			m.queue.SetProgress(jobID, 0)
+			m.AssetHandler.ClearImage()
+			m.emitQueueUpdate()
+			m.setState(StateIdle)
 			continue
 		}
 
-		bridge.FreeModel(handle)
+		if err != nil {
+			m.queue.FailJob(jobID, err.Error())
+			m.emitQueueUpdate()
+			m.setError(err)
+			m.setState(StateIdle)
+			continue
+		}
 
 		w := result.Width
 		h := result.Height
 		ch := result.Channels
 
-		// Copy raw pixel data into Go-managed memory
 		raw := make([]byte, len(result.Data))
 		copy(raw, result.Data)
 		bridge.FreeImage(&result)
 
-		// Encode raw pixels to PNG
 		pngBytes, err := encodePNG(raw, w, h, ch)
 		if err != nil {
+			m.queue.FailJob(jobID, fmt.Sprintf("encode PNG: %v", err))
+			m.emitQueueUpdate()
 			m.setError(fmt.Errorf("encode PNG: %w", err))
+			m.setState(StateIdle)
 			continue
 		}
 
-		// Sanity check: save to ~/.comfygo/generation/
-		if savePath, err := saveImage(pngBytes, params); err != nil {
+		savePath := ""
+		if p, err := saveImage(pngBytes, params); err != nil {
 			fmt.Printf("WARN: failed to save image: %v\n", err)
 		} else {
+			savePath = p
 			fmt.Printf("INFO: image saved to %s\n", savePath)
 		}
 
@@ -234,50 +279,73 @@ func (m *Manager) worker() {
 
 		m.AssetHandler.SetImage(pngBytes, w, h)
 
+		m.queue.CompleteJob(jobID, savePath)
+		m.emitQueueUpdate()
+
 		m.setState(StateComplete)
 		m.setProgress(1.0)
 		m.emit("generation-complete", map[string]int{
 			"width":  w,
 			"height": h,
+			"jobID":  jobID,
 		})
 	}
 }
 
-func (m *Manager) Generate(params GenerationParams) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if m.state != StateIdle && m.state != StateComplete {
-		return fmt.Errorf("cannot generate in state: %s", m.state)
+func (m *Manager) isCancelled(item *QueueItem) bool {
+	if bridge.IsCancelInFlight() {
+		bridge.ClearCancelInFlight()
+		m.queue.FailJob(item.ID, "cancelled")
+		m.AssetHandler.ClearImage()
+		m.emitQueueUpdate()
+		m.setState(StateIdle)
+		return true
 	}
-
-	if params.Width == 0 {
-		params.Width = 512
-	}
-	if params.Height == 0 {
-		params.Height = 512
-	}
-	if params.Steps <= 0 {
-		params.Steps = 20
-	}
-	if params.CfgScale <= 0 {
-		params.CfgScale = 7.0
-	}
-	if params.SamplerName == "" {
-		params.SamplerName = "euler_a"
-	}
-
-	go func() {
-		m.jobChan <- params
-	}()
-	return nil
+	return false
 }
 
-func (m *Manager) Cancel() {
+func (m *Manager) EnqueueJob(params GenerationParams) {
+	m.queue.Enqueue(params)
+	m.emitQueueUpdate()
+
 	select {
-	case m.cancelChan <- struct{}{}:
+	case m.runSignal <- struct{}{}:
 	default:
 	}
+}
+
+func (m *Manager) CancelRunningJob() {
+	if m.queue.RunningCount() > 0 {
+		bridge.SetCancelInFlight()
+	}
+}
+
+func (m *Manager) CancelJob(id int) {
+	m.queue.CancelJob(id)
+	m.emitQueueUpdate()
+}
+
+func (m *Manager) RetryJob(id int) {
+	m.queue.RetryJob(id)
+	m.emitQueueUpdate()
+	select {
+	case m.runSignal <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) GetQueue() []*QueueItem {
+	return m.queue.Snapshot()
+}
+
+func (m *Manager) ReorderQueue(from, to int) {
+	m.queue.Reorder(from, to)
+	m.emitQueueUpdate()
+}
+
+func (m *Manager) ClearCompleted() {
+	m.queue.ClearCompleted()
+	m.emitQueueUpdate()
 }
 
 func (m *Manager) GetState() string {
@@ -357,6 +425,10 @@ func (m *Manager) emit(event string, data ...interface{}) {
 	}
 }
 
+func (m *Manager) emitQueueUpdate() {
+	m.emit("queue-update", m.queue.Snapshot())
+}
+
 func (m *Manager) setState(s GenerationState) {
 	m.mu.Lock()
 	m.state = s
@@ -391,7 +463,6 @@ func encodePNG(data []byte, w, h, ch int) ([]byte, error) {
 		return buf.Bytes(), nil
 	}
 
-	// Assume 3 channels (RGB) — convert to RGBA
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {

@@ -3,13 +3,19 @@
 import {orchestrator} from '../models';
 import {context} from '../models';
 
-export function Cancel():Promise<void>;
+export function CancelJob(arg1:number):Promise<void>;
 
-export function Generate(arg1:orchestrator.GenerationParams):Promise<void>;
+export function CancelRunningJob():Promise<void>;
+
+export function ClearCompleted():Promise<void>;
+
+export function EnqueueJob(arg1:orchestrator.GenerationParams):Promise<void>;
 
 export function GetImageData():Promise<string>;
 
 export function GetProgress():Promise<number>;
+
+export function GetQueue():Promise<Array<orchestrator.QueueItem>>;
 
 export function GetState():Promise<string>;
 
@@ -18,5 +24,9 @@ export function GetSystemStats():Promise<orchestrator.SystemStats>;
 export function ListLoras():Promise<Array<string>>;
 
 export function ListModels():Promise<Array<string>>;
+
+export function ReorderQueue(arg1:number,arg2:number):Promise<void>;
+
+export function RetryJob(arg1:number):Promise<void>;
 
 export function Start(arg1:context.Context):Promise<void>;

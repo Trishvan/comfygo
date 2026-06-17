@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { EventsOn, WindowSetSize, WindowSetPosition } from "../wailsjs/runtime/runtime";
-  import { Generate, Cancel, GetImageData, GetSystemStats } from "../wailsjs/go/orchestrator/Manager";
+  import {
+    EnqueueJob,
+    CancelRunningJob,
+    ClearCompleted,
+    GetSystemStats,
+  } from "../wailsjs/go/orchestrator/Manager";
   import TopBar from "./components/TopBar.svelte";
   import LeftNav from "./components/LeftNav.svelte";
   import PreviewPanel from "./components/PreviewPanel.svelte";
@@ -26,6 +31,7 @@
   let bottomPanel: BottomPanel;
 
   let statsTimer: number | undefined;
+  let queue: any[] = [];
 
   async function pollStats() {
     try {
@@ -41,27 +47,25 @@
 
   async function handleGenerate(params: any) {
     imageUrl = "";
-    bottomPanel?.addJob(params.prompt || "Untitled", params.modelPath || "unknown");
-    bottomPanel?.addLog("Generation started");
-    bottomPanel?.setRunningJob();
-    Generate(params);
+    try {
+      await EnqueueJob(params);
+      bottomPanel?.addLog("Queued generation");
+    } catch (e) {
+      console.error("EnqueueJob failed:", e);
+      bottomPanel?.addLog(`Error: ${e}`);
+    }
   }
 
   function handleCancel() {
-    Cancel();
-    bottomPanel?.addLog("Generation cancelled");
+    CancelRunningJob();
   }
 
   function onStateChange(s: string) {
     state = s;
-    if (s === "generating") {
-      bottomPanel?.setRunningJob();
-    }
   }
 
   function onProgress(step: number, total: number) {
     progress = step / total;
-    bottomPanel?.updateRunningJob(step / total);
   }
 
   async function onComplete(meta: { width: number; height: number }) {
@@ -69,30 +73,43 @@
     imageHeight = meta.height;
     state = "complete";
 
+    const { GetImageData } = await import("../wailsjs/go/orchestrator/Manager");
     const b64 = await GetImageData();
     if (b64) {
       imageUrl = `data:image/png;base64,${b64}`;
       previewPanel?.addThumbnail(imageUrl);
     }
-    bottomPanel?.completeRunningJob(true);
     bottomPanel?.addLog("Generation completed");
   }
 
   function onError(msg: string) {
     state = "error";
     console.error(msg);
-    bottomPanel?.completeRunningJob(false);
     bottomPanel?.addLog(`Error: ${msg}`);
   }
 
-  onMount(() => {
+  function onQueueUpdate(items: any) {
+    if (Array.isArray(items)) {
+      queue = items;
+    }
+  }
+
+  onMount(async () => {
     const unsub1 = EventsOn("state-change", onStateChange);
     const unsub2 = EventsOn("progress", onProgress);
     const unsub3 = EventsOn("generation-complete", onComplete);
     const unsub4 = EventsOn("error", onError);
+    const unsub5 = EventsOn("queue-update", onQueueUpdate);
 
-    // Position at (0,0) and size to fill the available screen area.
-    // More reliable than WindowMaximise on Linux with webkit2_41.
+    // Fetch initial queue state (startup events are lost before listener registration)
+    try {
+      const { GetQueue } = await import("../wailsjs/go/orchestrator/Manager");
+      const items = await GetQueue();
+      if (Array.isArray(items)) {
+        queue = items;
+      }
+    } catch {}
+
     setTimeout(async () => {
       try {
         await WindowSetPosition(0, 0);
@@ -100,12 +117,11 @@
       } catch {}
     }, 200);
 
-    // Poll system stats every 3 seconds
     pollStats();
     statsTimer = window.setInterval(pollStats, 3000);
 
     return () => {
-      unsub1(); unsub2(); unsub3(); unsub4();
+      unsub1(); unsub2(); unsub3(); unsub4(); unsub5();
       if (statsTimer !== undefined) clearInterval(statsTimer);
     };
   });
@@ -126,7 +142,7 @@
     <WorkflowStages {state} {progress} />
   </div>
   <InspectorPanel {state} onGenerate={handleGenerate} onCancel={handleCancel} />
-  <BottomPanel {state} {ramUsedGB} {ramTotalGB} {ramPercent} {vramUsedGB} {vramTotalGB} {vramPercent} bind:this={bottomPanel} />
+  <BottomPanel {state} {queue} {ramUsedGB} {ramTotalGB} {ramPercent} {vramUsedGB} {vramTotalGB} {vramPercent} bind:this={bottomPanel} />
 </div>
 
 <style>

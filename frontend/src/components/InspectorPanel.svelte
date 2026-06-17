@@ -136,7 +136,6 @@
                 max="2"
                 step="0.05"
                 bind:value={slot.scale}
-                disabled={isBusy}
                 class="lora-scale"
               />
               <span class="lora-val">{slot.scale.toFixed(2)}</span>
@@ -144,7 +143,6 @@
                 type="button"
                 class="lora-remove"
                 on:click={() => removeLora(i)}
-                disabled={isBusy}
               >&times;</button>
             </div>
           </div>
@@ -156,7 +154,6 @@
               placeholder="Search LoRAs..."
               bind:value={loraPickerQuery}
               class="lora-search"
-              disabled={isBusy}
             />
             <div class="lora-list">
               {#if filteredLoras.length === 0}
@@ -167,7 +164,6 @@
                     type="button"
                     class="lora-option"
                     on:click={() => addLora(lora)}
-                    disabled={isBusy}
                   >{loraName(lora)}</button>
                 {/each}
               {/if}
@@ -178,14 +174,13 @@
             type="button"
             class="btn btn-add-lora"
             on:click={() => (showLoraPicker = true)}
-            disabled={isBusy}
           >+ Add LoRA</button>
         {/if}
       </div>
 
       <div class="field">
         <label for="sampler">Sampler</label>
-        <select id="sampler" bind:value={samplerName} disabled={isBusy}>
+        <select id="sampler" bind:value={samplerName}>
           <option value="euler_a">Euler A</option>
           <option value="euler">Euler</option>
           <option value="heun">Heun</option>
@@ -215,7 +210,6 @@
           min="1"
           max="50"
           bind:value={steps}
-          disabled={isBusy}
         />
       </div>
 
@@ -228,7 +222,6 @@
           max="20"
           step="0.5"
           bind:value={cfgScale}
-          disabled={isBusy}
         />
       </div>
 
@@ -238,14 +231,13 @@
           id="seed"
           type="number"
           bind:value={seed}
-          disabled={isBusy}
         />
       </div>
 
       <div class="field-row">
         <div class="field">
           <label for="width">Width</label>
-          <select id="width" bind:value={width} disabled={isBusy}>
+          <select id="width" bind:value={width}>
             <option value={512}>512</option>
             <option value={640}>640</option>
             <option value={768}>768</option>
@@ -253,7 +245,7 @@
         </div>
         <div class="field">
           <label for="height">Height</label>
-          <select id="height" bind:value={height} disabled={isBusy}>
+          <select id="height" bind:value={height}>
             <option value={512}>512</option>
             <option value={640}>640</option>
             <option value={768}>768</option>
@@ -265,12 +257,11 @@
       <PromptInput label="Negative Prompt" bind:value={negativePrompt} />
 
       <div class="actions">
+        <button type="submit" class="btn btn-generate">Generate</button>
         {#if isBusy}
           <button type="button" class="btn btn-cancel" on:click={onCancel}>
             Cancel
           </button>
-        {:else}
-          <button type="submit" class="btn btn-generate">Generate</button>
         {/if}
       </div>
     </form>

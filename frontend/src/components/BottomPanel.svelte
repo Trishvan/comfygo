@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { CancelJob, CancelRunningJob, ClearCompleted, ReorderQueue, RetryJob } from "../../wailsjs/go/orchestrator/Manager";
+
   export let state: string;
+  export let queue: any[] = [];
   export let ramUsedGB = 0;
   export let ramTotalGB = 0;
   export let ramPercent = 0;
@@ -8,67 +11,62 @@
   export let vramPercent = 0;
 
   let activeTab = "queue";
-
-  interface QueueItem {
-    id: number;
-    prompt: string;
-    status: "running" | "queued" | "completed" | "failed";
-    progress: number;
-    model: string;
-    timestamp: Date;
-  }
-
-  let queueItems: QueueItem[] = [];
-  let jobCounter = 0;
-
-  export function addJob(prompt: string, model: string) {
-    jobCounter++;
-    const item: QueueItem = {
-      id: jobCounter,
-      prompt: prompt.slice(0, 40) + (prompt.length > 40 ? "..." : ""),
-      status: "queued",
-      progress: 0,
-      model,
-      timestamp: new Date(),
-    };
-    queueItems = [item, ...queueItems];
-    if (queueItems.length > 20) queueItems = queueItems.slice(0, 20);
-  }
-
-  export function updateRunningJob(progress: number) {
-    const running = queueItems.find((q) => q.status === "running");
-    if (running) {
-      running.progress = progress;
-      queueItems = [...queueItems];
-    }
-  }
-
-  export function completeRunningJob(success: boolean) {
-    const running = queueItems.find((q) => q.status === "running");
-    if (running) {
-      running.status = success ? "completed" : "failed";
-      running.progress = success ? 1 : 0;
-      queueItems = [...queueItems];
-    }
-  }
-
-  export function setRunningJob() {
-    const queued = queueItems.find((q) => q.status === "queued");
-    if (queued) {
-      queued.status = "running";
-      queueItems = [...queueItems];
-    }
-  }
-
-  $: timeStr = (d: Date) =>
-    d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  let filter: string | null = null;
 
   let logs: string[] = [];
-  let logInput = "";
 
   export function addLog(msg: string) {
     logs = [`[${new Date().toLocaleTimeString()}] ${msg}`, ...logs];
     if (logs.length > 100) logs = logs.slice(0, 100);
+  }
+
+  async function handleCancelJob(id: number, status: string) {
+    if (status === "running") {
+      await CancelRunningJob();
+    } else {
+      await CancelJob(id);
+    }
+  }
+
+  async function handleClearCompleted() {
+    await ClearCompleted();
+  }
+
+  async function handleReorder(from: number, to: number) {
+    await ReorderQueue(from, to);
+  }
+
+  async function handleRetryJob(id: number) {
+    await RetryJob(id);
+  }
+
+  function statusLabel(s: string): string {
+    switch (s) {
+      case "queued": return "Queued";
+      case "running": return "Running";
+      case "completed": return "Done";
+      case "failed": return "Failed";
+      case "cancelled": return "Cancelled";
+      default: return s;
+    }
+  }
+
+  function promptShort(prompt: string): string {
+    return prompt.slice(0, 40) + (prompt.length > 40 ? "..." : "");
+  }
+
+  function fileName(filePath: string): string {
+    const parts = (filePath || "").split("/");
+    return parts[parts.length - 1] || "";
+  }
+
+  $: filteredQueue = !Array.isArray(queue) ? [] : (filter ? queue.filter((item: any) => item.status === filter) : queue);
+
+  function timeStr(d: string) {
+    if (!d) return "--";
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return "--";
+    return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 </script>
 
@@ -79,7 +77,7 @@
       class:active={activeTab === "queue"}
       on:click={() => (activeTab = "queue")}
     >
-      Queue
+      Queue ({queue.length})
     </button>
     <button
       class="tab"
@@ -99,37 +97,60 @@
 
   <div class="tab-content">
     {#if activeTab === "queue"}
-      <div class="queue-filters">
-        <span class="filter active">All</span>
-        <span class="filter">Running</span>
-        <span class="filter">Queued</span>
-        <span class="filter">Completed</span>
+      <div class="queue-toolbar">
+        <div class="queue-filters">
+          <span class="filter" class:active={filter === null} on:click={() => (filter = null)}>All</span>
+          <span class="filter" class:active={filter === "running"} on:click={() => (filter = "running")}>Running</span>
+          <span class="filter" class:active={filter === "queued"} on:click={() => (filter = "queued")}>Queued</span>
+          <span class="filter" class:active={filter === "completed"} on:click={() => (filter = "completed")}>Done</span>
+        </div>
+        <button class="clear-btn" on:click={handleClearCompleted}>Clear Done</button>
       </div>
       <div class="queue-list">
-        {#if queueItems.length === 0}
-          <div class="empty">No jobs in queue</div>
+        {#if filteredQueue.length === 0}
+          <div class="empty">No {filter || "jobs"} in queue</div>
         {:else}
-          {#each queueItems as item (item.id)}
-            <div class="queue-item" class:running={item.status === "running"}>
+          {#each filteredQueue as item, i (item.id)}
+            <div
+              class="queue-item"
+              class:running={item.status === "running"}
+              class:failed={item.status === "failed" || item.status === "cancelled"}
+              class:done={item.status === "completed"}
+            >
               <div class="qi-header">
-                <span
-                  class="qi-status"
-                  class:running={item.status === "running"}
-                  class:completed={item.status === "completed"}
-                  class:failed={item.status === "failed"}
-                ></span>
-                <span class="qi-prompt">{item.prompt}</span>
-                <span class="qi-time">{timeStr(item.timestamp)}</span>
+                <span class="qi-status" class:running={item.status === "running"} class:done={item.status === "completed"} class:failed={item.status === "failed" || item.status === "cancelled"}></span>
+                <span class="qi-prompt" title={item.params?.prompt}>{promptShort(item.params?.prompt || "Untitled")}</span>
+                <span class="qi-model">{fileName(item.params?.modelPath)}</span>
+                <span class="qi-time">{timeStr(item.createdAt)}</span>
+                <span class="qi-state">{statusLabel(item.status)}</span>
               </div>
-              {#if item.status === "running" || item.status === "completed"}
+              {#if item.status === "running" || item.status === "queued"}
                 <div class="qi-progress">
-                  <div
-                    class="qi-bar"
-                    style="width: {item.progress * 100}%"
-                    class:done={item.status === "completed"}
-                  ></div>
+                  <div class="qi-bar" style="width: {item.progress * 100}%"></div>
+                </div>
+              {:else if item.status === "completed"}
+                <div class="qi-progress">
+                  <div class="qi-bar done" style="width: 100%"></div>
                 </div>
               {/if}
+              {#if item.error}
+                <div class="qi-error">{item.error}</div>
+              {/if}
+              <div class="qi-actions">
+                {#if item.status === "queued"}
+                  <button class="qi-btn" on:click={() => handleCancelJob(item.id, item.status)}>Cancel</button>
+                  {#if i > 0}
+                    <button class="qi-btn" on:click={() => handleReorder(i, i - 1)}>Up</button>
+                  {/if}
+                  {#if i < filteredQueue.length - 1}
+                    <button class="qi-btn" on:click={() => handleReorder(i, i + 1)}>Down</button>
+                  {/if}
+                {:else if item.status === "running"}
+                  <button class="qi-btn cancel" on:click={() => handleCancelJob(item.id, item.status)}>Cancel</button>
+                {:else}
+                  <button class="qi-btn rerun" on:click={() => handleRetryJob(item.id)}>Re-run</button>
+                {/if}
+              </div>
             </div>
           {/each}
         {/if}
@@ -212,10 +233,15 @@
     min-height: 0;
   }
 
+  .queue-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
   .queue-filters {
     display: flex;
     gap: 8px;
-    margin-bottom: 8px;
   }
   .filter {
     font-size: 11px;
@@ -231,6 +257,19 @@
     color: var(--accent);
     background: var(--accent-glow);
   }
+  .clear-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .clear-btn:hover {
+    color: var(--text-secondary);
+    border-color: var(--text-muted);
+  }
 
   .queue-list {
     display: flex;
@@ -245,6 +284,12 @@
   }
   .queue-item.running {
     border-color: var(--accent);
+  }
+  .queue-item.failed {
+    border-color: var(--red);
+  }
+  .queue-item.done {
+    border-color: var(--green);
   }
 
   .qi-header {
@@ -263,7 +308,7 @@
     background: var(--accent);
     animation: pulse 1.5s infinite;
   }
-  .qi-status.completed {
+  .qi-status.done {
     background: var(--green);
   }
   .qi-status.failed {
@@ -277,7 +322,21 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .qi-model {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .qi-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .qi-state {
     font-size: 10px;
     color: var(--text-muted);
     flex-shrink: 0;
@@ -298,6 +357,41 @@
   }
   .qi-bar.done {
     background: var(--green);
+  }
+  .qi-error {
+    font-size: 10px;
+    color: var(--red);
+    margin-top: 4px;
+  }
+
+  .qi-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .qi-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .qi-btn:hover {
+    color: var(--text-secondary);
+  }
+  .qi-btn.cancel {
+    color: var(--red);
+  }
+  .qi-btn.cancel:hover {
+    border-color: var(--red);
+  }
+  .qi-btn.rerun {
+    color: var(--green);
+  }
+  .qi-btn.rerun:hover {
+    border-color: var(--green);
   }
 
   @keyframes pulse {
