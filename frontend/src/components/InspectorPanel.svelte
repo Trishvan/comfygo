@@ -129,22 +129,24 @@
         {#each loraSlots as slot, i}
           <div class="lora-row">
             <span class="lora-name" title={slot.path}>{loraName(slot.path)}</span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step="0.05"
-              bind:value={slot.scale}
-              disabled={isBusy}
-              class="lora-scale"
-            />
-            <span class="lora-val">{slot.scale.toFixed(2)}</span>
-            <button
-              type="button"
-              class="lora-remove"
-              on:click={() => removeLora(i)}
-              disabled={isBusy}
-            >&times;</button>
+            <div class="lora-controls">
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.05"
+                bind:value={slot.scale}
+                disabled={isBusy}
+                class="lora-scale"
+              />
+              <span class="lora-val">{slot.scale.toFixed(2)}</span>
+              <button
+                type="button"
+                class="lora-remove"
+                on:click={() => removeLora(i)}
+                disabled={isBusy}
+              >&times;</button>
+            </div>
           </div>
         {/each}
         {#if showLoraPicker}
@@ -185,6 +187,23 @@
         <label for="sampler">Sampler</label>
         <select id="sampler" bind:value={samplerName} disabled={isBusy}>
           <option value="euler_a">Euler A</option>
+          <option value="euler">Euler</option>
+          <option value="heun">Heun</option>
+          <option value="dpm2">DPM2</option>
+          <option value="dpmpp2s_a">DPM++ 2S a</option>
+          <option value="dpmpp2m">DPM++ 2M</option>
+          <option value="dpmpp2mv2">DPM++ 2M v2</option>
+          <option value="ipndm">IPNDM</option>
+          <option value="ipndm_v">IPNDM V</option>
+          <option value="lcm">LCM</option>
+          <option value="ddim_trailing">DDIM Trailing</option>
+          <option value="tcd">TCD</option>
+          <option value="res_multistep">Restart Multi</option>
+          <option value="res_2s">Restart 2S</option>
+          <option value="er_sde">ER SDE</option>
+          <option value="euler_cfg_pp">Euler CFG++</option>
+          <option value="euler_a_cfg_pp">Euler A CFG++</option>
+          <option value="euler_ge">Euler GE</option>
         </select>
       </div>
 
@@ -407,9 +426,9 @@
   }
   .lora-row {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 6px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
     background: var(--bg-secondary);
     border-radius: 5px;
     border: 1px solid var(--border-subtle);
@@ -417,14 +436,18 @@
   .lora-name {
     font-size: 11px;
     color: var(--text-secondary);
-    flex: 1;
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-width: 0;
+  }
+  .lora-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .lora-scale {
-    width: 60px;
+    flex: 1;
     accent-color: var(--accent);
   }
   .lora-val {
@@ -441,9 +464,6 @@
     cursor: pointer;
     padding: 0 2px;
     line-height: 1;
-  }
-  .lora-remove:disabled {
-    opacity: 0.4;
   }
   .btn-add-lora {
     background: var(--bg-secondary);

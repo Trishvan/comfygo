@@ -44,12 +44,9 @@ void free_model_c(int model_handle) {
 }
 
 static int sample_method_from_name(const char* name) {
-    if (name == nullptr) return EULER_A_SAMPLE_METHOD;
-    for (int i = 0; i < SAMPLE_METHOD_COUNT; i++) {
-        const char* n = sd_sample_method_name((enum sample_method_t)i);
-        if (n && strcmp(name, n) == 0) return i;
-    }
-    return EULER_A_SAMPLE_METHOD;
+    if (name == nullptr || name[0] == '\0') return EULER_A_SAMPLE_METHOD;
+    enum sample_method_t m = str_to_sample_method(name);
+    return m < SAMPLE_METHOD_COUNT ? m : EULER_A_SAMPLE_METHOD;
 }
 
 sd_image_t txt2img_c(int model_handle, sd_config_t config) {
