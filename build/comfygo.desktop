@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ComfyGo
+Comment=Stable Diffusion desktop application
+Exec=comfygo
+Icon=comfygo
+Terminal=false
+Type=Application
+Categories=Graphics;AI;
+StartupWMClass=comfygo

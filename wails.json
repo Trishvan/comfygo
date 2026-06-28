@@ -1,15 +1,23 @@
 {
+  "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "comfygo",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Node-free Stable Diffusion desktop app using Wails + stable-diffusion.cpp",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "comfygo",
-    "email": "dev@comfygo.local"
+    "name": "ComfyGo",
+    "email": "dev@comfygo.app"
   },
   "output": "build",
-  "wailsjs": "./frontend/wailsjs"
+  "wailsjs": "./frontend/wailsjs",
+  "info": {
+    "companyName": "ComfyGo",
+    "productName": "ComfyGo",
+    "productVersion": "0.1.5",
+    "copyright": "MIT",
+    "comments": "Stable Diffusion 1.5 desktop app"
+  }
 }
