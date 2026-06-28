@@ -35,20 +35,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
+      - name: Install Wails CLI
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
       - name: Install frontend deps
         run: npm ci
         working-directory: frontend
 
       - name: Generate Wails bindings
-        run: GOFLAGS="-tags=webkit2_41" wails generate module
+        run: wails generate module
 
       - name: Build Wails app
-        run: wails build -tags webkit2_41 -o comfygo-${{ runner.os }}
+        run: wails build -o comfygo-${{ runner.os }}
         env:
           CGO_LDFLAGS: ""
+          GOFLAGS: ${{ runner.os == 'Linux' && '-tags=webkit2_41' || '' }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: comfygo-${{ runner.os }}
-          path: build/bin/comfygo-*
+          path: |
+            build/bin/comfygo-*
+            build/bin/*.exe
+            build/bin/*.app
