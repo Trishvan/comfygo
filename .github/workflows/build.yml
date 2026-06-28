@@ -33,7 +33,34 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev cmake build-essential
+
+      - name: Cache stable-diffusion.cpp build
+        if: runner.os == 'Linux'
+        id: cache-sd
+        uses: actions/cache@v4
+        with:
+          path: Sdcpp
+          key: sd-cpp-${{ runner.os }}-c2df4e1
+
+      - name: Build stable-diffusion.cpp (Linux)
+        if: runner.os == 'Linux' && steps.cache-sd.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/stable-diffusion.cpp
+          cd /tmp/stable-diffusion.cpp
+          git init
+          git remote add origin https://github.com/leejet/stable-diffusion.cpp
+          git config user.email "ci@comfygo.app"
+          git config user.name "CI"
+          git fetch --depth 1 origin c2df4e1
+          git checkout FETCH_HEAD
+          git submodule update --init --recursive --depth 1
+          mkdir -p build && cd build
+          cmake .. -DSD_WEBP=OFF -DSD_WEBM=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release -j$(nproc)
+          SDCPP_DIR="$GITHUB_WORKSPACE/Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan"
+          mkdir -p "$SDCPP_DIR"
+          cp libstable-diffusion.so "$SDCPP_DIR/"
 
       - name: Install Wails CLI (Linux only)
         if: runner.os == 'Linux'
