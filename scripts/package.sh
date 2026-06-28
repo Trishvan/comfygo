@@ -85,7 +85,9 @@ case "$OS" in
     # .deb
     if command -v dpkg-deb &>/dev/null; then
       echo "    Building .deb..."
-      PKG_ROOT="build/pkg/comfygo_${VERSION}_${ARCH}"
+      DEB_ARCH="$ARCH"
+      [ "$DEB_ARCH" = "x86_64" ] && DEB_ARCH="amd64"
+      PKG_ROOT="build/pkg/comfygo_${VERSION}_${DEB_ARCH}"
       mkdir -p "$PKG_ROOT/DEBIAN"
       mkdir -p "$PKG_ROOT/usr/bin"
       mkdir -p "$PKG_ROOT/usr/share/applications"
@@ -97,7 +99,7 @@ Package: comfygo
 Version: $VERSION
 Section: graphics
 Priority: optional
-Architecture: $ARCH
+Architecture: $DEB_ARCH
 Maintainer: ComfyGo <dev@comfygo.app>
 Description: Node-free Stable Diffusion desktop app
  A desktop application for Stable Diffusion 1.5 image generation.
@@ -116,8 +118,8 @@ EOF
       # Icon
       cp build/appicon.png "$PKG_ROOT/usr/share/icons/hicolor/512x512/apps/comfygo.png"
 
-      dpkg-deb --build "$PKG_ROOT" "build/bin/comfygo_${VERSION}_${ARCH}.deb"
-      echo "    → build/bin/comfygo_${VERSION}_${ARCH}.deb"
+      dpkg-deb --build --root-owner-group "$PKG_ROOT" "build/bin/comfygo_${VERSION}_${DEB_ARCH}.deb"
+      echo "    → build/bin/comfygo_${VERSION}_${DEB_ARCH}.deb"
       rm -rf "build/pkg"
     else
       echo "    dpkg-deb not found — skipping .deb"
@@ -125,7 +127,8 @@ EOF
 
     # .rpm
     if command -v rpmbuild &>/dev/null; then
-      echo "    Building .rpm..."
+      RPM_ARCH="$ARCH"
+      echo "    Building .rpm (arch=$RPM_ARCH)..."
       mkdir -p "build/rpm/SOURCES"
       BIN="$(ls build/bin/comfygo* 2>/dev/null | head -1)"
       if [ -n "$BIN" ]; then
@@ -140,7 +143,7 @@ Summary: Node-free Stable Diffusion desktop app
 License: MIT
 URL: https://github.com/Trishvan/comfygo
 Group: Graphics
-BuildArch: $ARCH
+BuildArch: $RPM_ARCH
 
 %description
 A desktop application for Stable Diffusion 1.5 image generation.
@@ -171,7 +174,7 @@ EOF
 
       rpmbuild -bb "build/rpm/comfygo.spec" --define "_topdir $(pwd)/build/rpm"
       mv "build/rpm/RPMS/$ARCH/comfygo-$VERSION-1.$ARCH.rpm" "build/bin/" 2>/dev/null || true
-      echo "    → build/bin/comfygo-$VERSION-1.$ARCH.rpm"
+      echo "    → build/bin/comfygo-$VERSION-1.$RPM_ARCH.rpm"
       rm -rf "build/rpm"
     else
       echo "    rpmbuild not found — skipping .rpm"
