@@ -46,14 +46,10 @@ jobs:
       - name: Build stable-diffusion.cpp (Linux)
         if: runner.os == 'Linux' && steps.cache-sd.outputs.cache-hit != 'true'
         run: |
-          mkdir -p /tmp/stable-diffusion.cpp
+          curl -sL "https://github.com/leejet/stable-diffusion.cpp/archive/c2df4e1.tar.gz" | tar xz -C /tmp
+          mv /tmp/stable-diffusion.cpp-c2df4e1 /tmp/stable-diffusion.cpp
           cd /tmp/stable-diffusion.cpp
-          git init
-          git remote add origin https://github.com/leejet/stable-diffusion.cpp
-          git config user.email "ci@comfygo.app"
-          git config user.name "CI"
-          git fetch --depth 1 origin c2df4e1
-          git checkout FETCH_HEAD
+          git init && git add . && git commit -m "snapshot" --quiet
           git submodule update --init --recursive --depth 1
           mkdir -p build && cd build
           cmake .. -DSD_WEBP=OFF -DSD_WEBM=OFF -DCMAKE_BUILD_TYPE=Release
