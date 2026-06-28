@@ -33,30 +33,16 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev cmake build-essential
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev unzip
 
-      - name: Cache stable-diffusion.cpp build
+      - name: Download stable-diffusion.cpp prebuilt binary (Linux)
         if: runner.os == 'Linux'
-        id: cache-sd
-        uses: actions/cache@v4
-        with:
-          path: Sdcpp
-          key: sd-cpp-${{ runner.os }}-c2df4e1
-
-      - name: Build stable-diffusion.cpp (Linux)
-        if: runner.os == 'Linux' && steps.cache-sd.outputs.cache-hit != 'true'
         run: |
-          curl -sL "https://github.com/leejet/stable-diffusion.cpp/archive/c2df4e1.tar.gz" | tar xz -C /tmp
-          mv /tmp/stable-diffusion.cpp-c2df4e1 /tmp/stable-diffusion.cpp
-          cd /tmp/stable-diffusion.cpp
-          git init && git add . && git commit -m "snapshot" --quiet
-          git submodule update --init --recursive --depth 1
-          mkdir -p build && cd build
-          cmake .. -DSD_WEBP=OFF -DSD_WEBM=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --config Release -j$(nproc)
           SDCPP_DIR="$GITHUB_WORKSPACE/Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan"
           mkdir -p "$SDCPP_DIR"
-          cp libstable-diffusion.so "$SDCPP_DIR/"
+          curl -sL "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-700-c2df4e1/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip" -o /tmp/sdcpp.zip
+          unzip -o /tmp/sdcpp.zip -d "$SDCPP_DIR"
+          ls -la "$SDCPP_DIR"
 
       - name: Install Wails CLI (Linux only)
         if: runner.os == 'Linux'
@@ -83,6 +69,27 @@ jobs:
         run: wails build -tags webkit2_41 -o comfygo-${{ runner.os }}
         env:
           CGO_LDFLAGS: ""
+
+      - name: Download stable-diffusion.cpp prebuilt (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          SDCPP_DIR="$GITHUB_WORKSPACE/Sdcpp/sd-master-c2df4e1-bin-Darwin-macOS-15.7.7-arm64"
+          mkdir -p "$SDCPP_DIR"
+          curl -sL "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-700-c2df4e1/sd-master-c2df4e1-bin-Darwin-macOS-15.7.7-arm64.zip" -o /tmp/sdcpp.zip
+          unzip -o /tmp/sdcpp.zip -d "$SDCPP_DIR"
+          # Adjust cgo path — macOS uses .dylib not .so
+          if [ -f "$SDCPP_DIR/libstable-diffusion.dylib" ]; then
+            ln -sf libstable-diffusion.dylib "$SDCPP_DIR/libstable-diffusion.so"
+          fi
+
+      - name: Download stable-diffusion.cpp prebuilt (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          SDCPP_DIR="$GITHUB_WORKSPACE/Sdcpp/sd-master-c2df4e1-bin-win-vulkan-x64"
+          mkdir -p "$SDCPP_DIR"
+          curl -sL "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-700-c2df4e1/sd-master-c2df4e1-bin-win-vulkan-x64.zip" -o /tmp/sdcpp.zip
+          unzip -o /tmp/sdcpp.zip -d "$SDCPP_DIR"
 
       - name: Go vet (macOS/Windows)
         if: runner.os != 'Linux'
