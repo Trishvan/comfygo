@@ -2,60 +2,63 @@
 
 Desktop application for Stable Diffusion 1.5 image generation. Go backend with Svelte frontend, powered by [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp).
 
+## Quick Start
+
+```bash
+git clone https://github.com/Trishvan/comfygo.git
+cd comfygo
+make setup              # one command — installs everything
+cp model.safetensors ~/.comfygo/models/
+make dev                # start in development mode
+```
+
+`make setup` auto-detects your OS, installs system dependencies, downloads the prebuilt stable-diffusion.cpp library, installs frontend packages, and generates Wails bindings.
+
 ## Prerequisites
 
-- Go 1.23+
-- Node 20+
-- **Linux:** `sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev`
-- **macOS:** Xcode Command Line Tools (`xcode-select --install`)
-- **Windows:** WebView2 runtime (included in Windows 10+)
+- **Go 1.23+** — [go.dev/dl](https://go.dev/dl/)
+- **Node.js 20+** — [nodejs.org](https://nodejs.org/)
 
-## Setup
+`make setup` will verify these and report if anything is missing.
 
-### 1. Get the prebuilt stable-diffusion.cpp library
+## Makefile Targets
 
-Download the appropriate prebuilt binary for your platform from the [releases page](https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-700-c2df4e1):
+| Target | Description |
+|--------|-------------|
+| `make setup` | Full one-time setup (system deps, library, npm, bindings) |
+| `make dev` | Start `wails dev` server |
+| `make build` | Production build to `build/bin/comfygo` |
+| `make clean` | Remove build artifacts |
+| `make bindings` | Regenerate Wails Go→TypeScript bindings |
+| `make lint` | Run Svelte type-check |
 
-| Platform | Download |
-|----------|----------|
-| Linux (x86_64, Vulkan) | `sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip` |
-| Linux (x86_64, CPU) | `sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64.zip` |
-| macOS (ARM64) | `sd-master-c2df4e1-bin-Darwin-macOS-15.7.7-arm64.zip` |
-| Windows (x86_64, Vulkan) | `sd-master-c2df4e1-bin-win-vulkan-x64.zip` |
+## Manual Setup
 
-Extract into `Sdcpp/`:
+If you prefer to do things step by step:
 
 ```bash
-mkdir -p Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan
-cd Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan
+# 1. Install system dependencies (Linux)
+sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev unzip
+
+# 2. Install Wails CLI
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+# 3. Download stable-diffusion.cpp library
+#    Pick the right archive for your platform from:
+#    https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-700-c2df4e1
+mkdir -p Sdcpp/sd-master-c2df4e1-bin-<your-platform>
+cd Sdcpp/sd-master-c2df4e1-bin-<your-platform>
 unzip /path/to/downloaded.zip
-```
+cd ../..
 
-> The directory name encodes the branch, commit, OS, arch, and backend. CI downloads these automatically from the release.
-
-### 2. Install dependencies
-
-```bash
+# 4. Install frontend dependencies
 npm install --prefix frontend
-```
 
-### 3. Copy your model
+# 5. Generate bindings
+GOFLAGS="-tags=webkit2_41" wails generate module
 
-```bash
-mkdir -p ~/.comfygo/models
-cp your-model.safetensors ~/.comfygo/models/
-```
-
-### 4. Run in dev mode
-
-```bash
+# 6. Run
 wails dev -tags webkit2_41
-```
-
-## Build
-
-```bash
-wails build -tags webkit2_41 -o comfygo
 ```
 
 ## Project Structure
@@ -82,20 +85,23 @@ wails build -tags webkit2_41 -o comfygo
 │   │   │   ├── BottomPanel.svelte   # Queue, logs, system monitor
 │   │   │   └── GalleryView.svelte   # Outputs gallery screen
 │   │   └── App.svelte
-├── Sdcpp/                   # Prebuilt stable-diffusion.cpp library (gitignored)
-├── .github/workflows/build.yml  # CI: builds on all 3 platforms
-├── main.go                  # App entry point
-└── wails.json               # Wails configuration
+├── scripts/
+│   └── setup.sh              # Automated setup script
+├── Sdcpp/                    # Prebuilt stable-diffusion.cpp library (gitignored)
+├── .github/workflows/build.yml  # CI: builds on Linux, validates on macOS/Windows
+├── Makefile                  # Build automation targets
+├── main.go                   # App entry point
+└── wails.json                # Wails configuration
 ```
-
-## CI
-
-The GitHub Actions workflow builds on Linux (full binary) and validates on macOS/Windows (go vet). Prebuilt stable-diffusion.cpp libraries are downloaded automatically from the upstream release.
 
 ## Model Placement
 
-Place `.safetensors`, `.ckpt`, or `.gguf` model files in `~/.comfygo/models/`. LoRA files go in `~/.comfygo/loras/`. The UI dropdowns will list available files on startup.
+Place `.safetensors`, `.ckpt`, or `.gguf` model files in `~/.comfygo/models/`. LoRA files go in `~/.comfygo/loras/`. The UI dropdowns list available files on startup.
 
 ## Output
 
-Generated images are saved to `~/.comfygo/generation/`. Generation history is persisted to `~/.comfygo/history.json`. The gallery tab in the left nav shows all past outputs.
+Generated images are saved to `~/.comfygo/generation/`. Generation history is persisted to `~/.comfygo/history.json`. The outputs gallery in the left nav shows all past outputs.
+
+## CI
+
+The GitHub Actions workflow (`.github/workflows/build.yml`) builds the full binary on Linux and validates Go code on macOS/Windows. Prebuilt stable-diffusion.cpp libraries are downloaded automatically from the upstream release.
