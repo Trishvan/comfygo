@@ -1,9 +1,6 @@
 package orchestrator
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -16,40 +13,28 @@ const (
 	JobCompleted  JobStatus = "completed"
 	JobFailed     JobStatus = "failed"
 	JobCancelled  JobStatus = "cancelled"
-	JobInterrupted JobStatus = "interrupted"
 )
 
 type QueueItem struct {
-	ID        int             `json:"id"`
-	Params    GenerationParams `json:"params"`
-	Status    JobStatus        `json:"status"`
-	Progress  float64          `json:"progress"`
-	OutputPath string          `json:"outputPath"`
-	Error     string           `json:"error"`
-	CreatedAt string           `json:"createdAt"`
+	ID         int              `json:"id"`
+	Params     GenerationParams `json:"params"`
+	Status     JobStatus        `json:"status"`
+	Progress   float64          `json:"progress"`
+	OutputPath string           `json:"outputPath"`
+	Error      string           `json:"error"`
+	CreatedAt  string           `json:"createdAt"`
 }
 
 type JobQueue struct {
-	mu          sync.Mutex
-	Items       []*QueueItem `json:"items"`
-	nextID      int          `json:"nextID"`
-	persistPath string
-	dirty       bool
+	mu     sync.Mutex
+	Items  []*QueueItem `json:"items"`
+	nextID int
 }
 
-func NewJobQueue(persistPath string) *JobQueue {
-	if persistPath == "" {
-		home, _ := os.UserHomeDir()
-		persistPath = filepath.Join(home, ".comfygo", "queue.json")
+func NewJobQueue() *JobQueue {
+	return &JobQueue{
+		Items: []*QueueItem{},
 	}
-	q := &JobQueue{
-		persistPath: persistPath,
-	}
-	q.load()
-	if q.Items == nil {
-		q.Items = []*QueueItem{}
-	}
-	return q
 }
 
 func (q *JobQueue) Enqueue(params GenerationParams) *QueueItem {
@@ -65,8 +50,6 @@ func (q *JobQueue) Enqueue(params GenerationParams) *QueueItem {
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 	q.Items = append(q.Items, item)
-	q.dirty = true
-	q.persist()
 	return item
 }
 
@@ -78,8 +61,6 @@ func (q *JobQueue) NextQueued() *QueueItem {
 		if item.Status == JobQueued {
 			item.Status = JobRunning
 			item.Progress = 0
-			q.dirty = true
-			q.persist()
 			return item
 		}
 	}
@@ -95,8 +76,6 @@ func (q *JobQueue) CompleteJob(id int, outputPath string) {
 			item.Status = JobCompleted
 			item.Progress = 1.0
 			item.OutputPath = outputPath
-			q.dirty = true
-			q.persist()
 			return
 		}
 	}
@@ -110,8 +89,6 @@ func (q *JobQueue) FailJob(id int, errMsg string) {
 		if item.ID == id {
 			item.Status = JobFailed
 			item.Error = errMsg
-			q.dirty = true
-			q.persist()
 			return
 		}
 	}
@@ -125,8 +102,6 @@ func (q *JobQueue) CancelJob(id int) {
 		if item.ID == id {
 			if item.Status == JobQueued {
 				item.Status = JobCancelled
-				q.dirty = true
-				q.persist()
 			}
 			return
 		}
@@ -167,8 +142,6 @@ func (q *JobQueue) Reorder(from, to int) {
 	item := q.Items[from]
 	q.Items = append(q.Items[:from], q.Items[from+1:]...)
 	q.Items = append(q.Items[:to], append([]*QueueItem{item}, q.Items[to:]...)...)
-	q.dirty = true
-	q.persist()
 }
 
 func (q *JobQueue) ClearCompleted() {
@@ -182,8 +155,6 @@ func (q *JobQueue) ClearCompleted() {
 		}
 	}
 	q.Items = filtered
-	q.dirty = true
-	q.persist()
 }
 
 func (q *JobQueue) RetryJob(id int) {
@@ -193,12 +164,10 @@ func (q *JobQueue) RetryJob(id int) {
 	for _, item := range q.Items {
 		if item.ID == id {
 			switch item.Status {
-			case JobCompleted, JobFailed, JobCancelled, JobInterrupted:
+			case JobCompleted, JobFailed, JobCancelled:
 				item.Status = JobQueued
 				item.Progress = 0
 				item.Error = ""
-				q.dirty = true
-				q.persist()
 			}
 			return
 		}
@@ -271,42 +240,4 @@ func (q *JobQueue) SetProgress(id int, p float64) {
 			return
 		}
 	}
-}
-
-func (q *JobQueue) MarkInterrupted() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	for _, item := range q.Items {
-		if item.Status == JobRunning {
-			item.Status = JobInterrupted
-		}
-	}
-	q.dirty = true
-	q.persist()
-}
-
-func (q *JobQueue) persist() {
-	if !q.dirty {
-		return
-	}
-	dir := filepath.Dir(q.persistPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return
-	}
-	data, err := json.MarshalIndent(q, "", "  ")
-	if err != nil {
-		return
-	}
-	os.WriteFile(q.persistPath, data, 0644)
-	q.dirty = false
-}
-
-func (q *JobQueue) load() {
-	data, err := os.ReadFile(q.persistPath)
-	if err != nil {
-		return
-	}
-	json.Unmarshal(data, q)
-	q.MarkInterrupted()
 }

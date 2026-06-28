@@ -1,5 +1,6 @@
 <script lang="ts">
   export let activeNav = "home";
+  export let onNavChange: (id: string) => void;
 
   const navItems = [
     { id: "home", label: "Home", path: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
@@ -22,7 +23,7 @@
       class="nav-btn"
       class:active={activeNav === item.id}
       title={item.label}
-      on:click={() => (activeNav = item.id)}
+      on:click={() => onNavChange(item.id)}
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d={item.path} />

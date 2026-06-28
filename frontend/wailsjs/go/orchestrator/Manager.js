@@ -18,8 +18,16 @@ export function EnqueueJob(arg1) {
   return window['go']['orchestrator']['Manager']['EnqueueJob'](arg1);
 }
 
+export function GetHistory() {
+  return window['go']['orchestrator']['Manager']['GetHistory']();
+}
+
 export function GetImageData() {
   return window['go']['orchestrator']['Manager']['GetImageData']();
+}
+
+export function GetOutputImage(arg1) {
+  return window['go']['orchestrator']['Manager']['GetOutputImage'](arg1);
 }
 
 export function GetProgress() {
@@ -44,6 +52,10 @@ export function ListLoras() {
 
 export function ListModels() {
   return window['go']['orchestrator']['Manager']['ListModels']();
+}
+
+export function ListOutputs() {
+  return window['go']['orchestrator']['Manager']['ListOutputs']();
 }
 
 export function ReorderQueue(arg1, arg2) {

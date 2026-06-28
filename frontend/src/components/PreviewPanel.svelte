@@ -4,14 +4,32 @@
   export let imageHeight: number;
   export let progress: number;
   export let state: string;
+  export let viewingUrl = "";
+  export let viewingWidth = 0;
+  export let viewingHeight = 0;
+  export let onBackToCurrent: () => void;
 
   let zoomMode: "fit" | "fill" | "one" = "fit";
   let thumbnails: string[] = [];
+  let currentDisplayUrl = "";
+  let currentDisplayW = 0;
+  let currentDisplayH = 0;
+
+  export function showImage(url: string, w: number, h: number) {
+    currentDisplayUrl = url;
+    currentDisplayW = w;
+    currentDisplayH = h;
+  }
 
   export function addThumbnail(url: string) {
     thumbnails = [url, ...thumbnails];
     if (thumbnails.length > 10) thumbnails = thumbnails.slice(0, 10);
   }
+
+  $: displayUrl = viewingUrl || currentDisplayUrl;
+  $: displayW = viewingWidth || currentDisplayW;
+  $: displayH = viewingHeight || currentDisplayH;
+  $: isShowingHistory = !!viewingUrl;
 
   $: progressLabel = state === "generating"
     ? `Generating... ${(progress * 100).toFixed(0)}%`
@@ -23,7 +41,7 @@
     ? "Error"
     : "";
 
-  $: resolutionLabel = imageWidth > 0 ? `${imageWidth} x ${imageHeight}` : "";
+  $: resolutionLabel = displayW > 0 ? `${displayW} x ${displayH}` : "";
 
   function cycleZoom() {
     const modes: Array<"fit" | "fill" | "one"> = ["fit", "fill", "one"];
@@ -33,15 +51,27 @@
 </script>
 
 <div class="preview-area">
+  {#if isShowingHistory}
+    <div class="history-banner">
+      <span>Viewing saved output</span>
+      {#if state === "loading" || state === "generating"}
+        <span class="gen-active">⚡ Generating in background</span>
+      {/if}
+      <button class="back-btn" on:click={onBackToCurrent}>
+        Back to Current
+      </button>
+    </div>
+  {/if}
+
   <div class="preview-canvas">
-    {#if state === "generating"}
+    {#if state === "generating" && !isShowingHistory}
       <div class="placeholder">
         <div class="spinner"></div>
         <p>{progressLabel}</p>
       </div>
-    {:else if imageUrl}
+    {:else if displayUrl}
       <img
-        src={imageUrl}
+        src={displayUrl}
         alt="Generated image"
         class="preview-img"
         class:fit={zoomMode === "fit"}
@@ -59,7 +89,7 @@
     {/if}
   </div>
 
-  {#if state === "generating"}
+  {#if state === "generating" && !isShowingHistory}
     <div class="progress-row">
       <div class="progress-track">
         <div class="progress-fill" style="width: {progress * 100}%"></div>
@@ -72,6 +102,9 @@
     <div class="tools-left">
       {#if resolutionLabel}
         <span class="resolution">{resolutionLabel}</span>
+      {/if}
+      {#if isShowingHistory}
+        <span class="history-tag">History</span>
       {/if}
     </div>
     <div class="tools-right">
@@ -93,13 +126,13 @@
     </div>
   </div>
 
-  {#if thumbnails.length > 0}
+  {#if thumbnails.length > 0 && !isShowingHistory}
     <div class="thumbnails">
       {#each thumbnails as thumb, i}
         <button
           class="thumb-btn"
           class:active={i === 0 && state === "complete"}
-          on:click={() => (imageUrl = thumb)}
+          on:click={() => showImage(thumb, displayW, displayH)}
         >
           <img src={thumb} alt="Thumbnail {i}" />
         </button>
@@ -114,6 +147,37 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+  }
+
+  .history-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: color-mix(in srgb, var(--blue) 15%, var(--bg-elevated));
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .gen-active {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .back-btn {
+    margin-left: auto;
+    padding: 3px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .back-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
   }
 
   .preview-canvas {
@@ -215,6 +279,13 @@
   .resolution {
     font-size: 11px;
     color: var(--text-muted);
+  }
+  .history-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--blue) 20%, var(--bg-elevated));
+    color: var(--blue);
   }
   .tools-right {
     display: flex;

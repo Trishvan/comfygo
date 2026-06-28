@@ -11,7 +11,11 @@ export function ClearCompleted():Promise<void>;
 
 export function EnqueueJob(arg1:orchestrator.GenerationParams):Promise<void>;
 
+export function GetHistory():Promise<Array<orchestrator.HistoryEntry>>;
+
 export function GetImageData():Promise<string>;
+
+export function GetOutputImage(arg1:string):Promise<string>;
 
 export function GetProgress():Promise<number>;
 
@@ -24,6 +28,8 @@ export function GetSystemStats():Promise<orchestrator.SystemStats>;
 export function ListLoras():Promise<Array<string>>;
 
 export function ListModels():Promise<Array<string>>;
+
+export function ListOutputs():Promise<Array<string>>;
 
 export function ReorderQueue(arg1:number,arg2:number):Promise<void>;
 

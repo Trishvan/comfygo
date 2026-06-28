@@ -69,12 +69,16 @@ type Manager struct {
 	state        GenerationState
 	progress     float64
 	queue        *JobQueue
+	history      *HistoryStore
 	runSignal    chan struct{}
 	AssetHandler *ImageAssetHandler
 
 	resultData []byte
 	resultW    int
 	resultH    int
+
+	lastStep  int
+	lastTotal int
 }
 
 type SystemStats struct {
@@ -126,9 +130,13 @@ func getSystemStats() SystemStats {
 }
 
 func NewManager() *Manager {
+	home, _ := os.UserHomeDir()
+	historyPath := filepath.Join(home, ".comfygo", "history.json")
+
 	m := &Manager{
 		state:     StateIdle,
-		queue:     NewJobQueue(""),
+		queue:     NewJobQueue(),
+		history:   NewHistoryStore(historyPath),
 		runSignal: make(chan struct{}, 1),
 	}
 	m.AssetHandler = NewImageAssetHandler()
@@ -185,6 +193,9 @@ func (m *Manager) worker() {
 		if err != nil {
 			m.queue.FailJob(item.ID, err.Error())
 			m.emitQueueUpdate()
+
+			m.history.Add(params, JobFailed, "", 0, 0, err.Error())
+			m.emitHistoryUpdate()
 			m.setError(err)
 			m.setState(StateIdle)
 			continue
@@ -222,6 +233,10 @@ func (m *Manager) worker() {
 			m.queue.SetProgress(jobID, p)
 			m.emitQueueUpdate()
 			m.setProgress(p)
+			m.mu.Lock()
+			m.lastStep = step
+			m.lastTotal = total
+			m.mu.Unlock()
 			m.emit("progress", step, total)
 		}
 
@@ -234,6 +249,9 @@ func (m *Manager) worker() {
 			m.queue.SetProgress(jobID, 0)
 			m.AssetHandler.ClearImage()
 			m.emitQueueUpdate()
+
+			m.history.Add(params, JobCancelled, "", 0, 0, "cancelled")
+			m.emitHistoryUpdate()
 			m.setState(StateIdle)
 			continue
 		}
@@ -241,6 +259,9 @@ func (m *Manager) worker() {
 		if err != nil {
 			m.queue.FailJob(jobID, err.Error())
 			m.emitQueueUpdate()
+
+			m.history.Add(params, JobFailed, "", 0, 0, err.Error())
+			m.emitHistoryUpdate()
 			m.setError(err)
 			m.setState(StateIdle)
 			continue
@@ -258,6 +279,9 @@ func (m *Manager) worker() {
 		if err != nil {
 			m.queue.FailJob(jobID, fmt.Sprintf("encode PNG: %v", err))
 			m.emitQueueUpdate()
+
+			m.history.Add(params, JobFailed, "", w, h, fmt.Sprintf("encode PNG: %v", err))
+			m.emitHistoryUpdate()
 			m.setError(fmt.Errorf("encode PNG: %w", err))
 			m.setState(StateIdle)
 			continue
@@ -282,6 +306,9 @@ func (m *Manager) worker() {
 		m.queue.CompleteJob(jobID, savePath)
 		m.emitQueueUpdate()
 
+		m.history.Add(params, JobCompleted, savePath, w, h, "")
+		m.emitHistoryUpdate()
+
 		m.setState(StateComplete)
 		m.setProgress(1.0)
 		m.emit("generation-complete", map[string]int{
@@ -298,6 +325,9 @@ func (m *Manager) isCancelled(item *QueueItem) bool {
 		m.queue.FailJob(item.ID, "cancelled")
 		m.AssetHandler.ClearImage()
 		m.emitQueueUpdate()
+
+		m.history.Add(item.Params, JobCancelled, "", 0, 0, "cancelled")
+		m.emitHistoryUpdate()
 		m.setState(StateIdle)
 		return true
 	}
@@ -371,6 +401,50 @@ func (m *Manager) GetImageData() string {
 
 func (m *Manager) GetSystemStats() SystemStats {
 	return getSystemStats()
+}
+
+func (m *Manager) GetHistory() []HistoryEntry {
+	return m.history.Snapshot()
+}
+
+func (m *Manager) ListOutputs() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []string{}
+	}
+	dir := filepath.Join(home, ".comfygo", "generation")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return []string{}
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	// newest first
+	for i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 {
+		names[i], names[j] = names[j], names[i]
+	}
+	return names
+}
+
+func (m *Manager) GetOutputImage(filename string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	path := filepath.Join(home, ".comfygo", "generation", filename)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+func (m *Manager) emitHistoryUpdate() {
+	m.emit("history-update", m.history.Snapshot())
 }
 
 func (m *Manager) ListLoras() []string {

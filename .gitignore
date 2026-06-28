@@ -20,6 +20,7 @@ dist/
 
 # Wails
 frontend/dist/
+build/
 
 # Models — never commit
 *.ckpt
