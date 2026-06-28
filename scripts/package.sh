@@ -106,13 +106,13 @@ Description: Node-free Stable Diffusion desktop app
  Go backend with Svelte frontend, powered by stable-diffusion.cpp.
 EOF
 
-      # Binary
-      BIN="$(ls build/bin/comfygo* 2>/dev/null | head -1)"
+      # Binary (pick newest by mtime)
+      BIN="$(ls -t build/bin/comfygo* 2>/dev/null | head -1)"
       if [ -n "$BIN" ]; then
         cp "$BIN" "$PKG_ROOT/usr/bin/comfygo"
       fi
-      # Library
-      cp -r Sdcpp/* "$PKG_ROOT/usr/lib/comfygo/"
+      # Library (find .so/.dylib/.dll in Sdcpp subdirs)
+      find Sdcpp -name 'libstable-diffusion.*' -exec cp {} "$PKG_ROOT/usr/lib/comfygo/" \;
       # Desktop entry
       cp build/comfygo.desktop "$PKG_ROOT/usr/share/applications/"
       # Icon
@@ -130,7 +130,7 @@ EOF
       RPM_ARCH="$ARCH"
       echo "    Building .rpm (arch=$RPM_ARCH)..."
       mkdir -p "build/rpm/SOURCES"
-      BIN="$(ls build/bin/comfygo* 2>/dev/null | head -1)"
+      BIN="$(ls -t build/bin/comfygo* 2>/dev/null | head -1)"
       if [ -n "$BIN" ]; then
         cp "$BIN" "build/rpm/SOURCES/comfygo"
       fi
@@ -157,7 +157,7 @@ mkdir -p %{buildroot}%{_libdir}/comfygo
 install -m 755 %{_sourcedir}/comfygo %{buildroot}%{_bindir}/
 install -m 644 build/comfygo.desktop %{buildroot}%{_datadir}/applications/
 install -m 644 build/appicon.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/comfygo.png
-cp -r Sdcpp/* %{buildroot}%{_libdir}/comfygo/
+find Sdcpp -name 'libstable-diffusion.*' -exec cp {} %{buildroot}%{_libdir}/comfygo/ \;
 
 %files
 %{_bindir}/comfygo
@@ -188,7 +188,7 @@ EOF
       mkdir -p "$APPDIR/usr/share/applications"
       mkdir -p "$APPDIR/usr/share/icons/hicolor/512x512/apps"
 
-      BIN="$(ls build/bin/comfygo* 2>/dev/null | head -1)"
+      BIN="$(ls -t build/bin/comfygo* 2>/dev/null | head -1)"
       if [ -n "$BIN" ]; then
         cp "$BIN" "$APPDIR/usr/bin/comfygo"
       fi

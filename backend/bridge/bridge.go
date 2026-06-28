@@ -3,7 +3,7 @@ package bridge
 /*
 #cgo CFLAGS: -I${SRCDIR}
 
-#cgo linux LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -Wl,-rpath,${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -lstable-diffusion -lstdc++ -lm -ldl
+#cgo linux LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -Wl,-rpath,'$ORIGIN/../lib/comfygo' -Wl,-rpath,${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Linux-Ubuntu-24.04-x86_64-vulkan -lstable-diffusion -lstdc++ -lm -ldl
 
 #cgo darwin LDFLAGS: -L${SRCDIR}/../../Sdcpp/sd-master-c2df4e1-bin-Darwin-macOS-15.7.7-arm64 -lstable-diffusion -lstdc++ -lm
 
